@@ -1,11 +1,10 @@
 package com.example.pfe.auth.entity;
 
 public enum Role {
-    USER,
-    ADMIN,
-    MODERATOR,
-    PERSONNEL,
-    MANAGER,
-    EMPLOYEE,
-    SUPER_ADMIN
+    ADMINISTRATEUR,
+    RESPONSABLE_ENTREPOT,
+    RECEIVER,
+    EFFECTOR_TRANSFERT,
+    EN_ATTENTE,
+    OPERATOR
 }
