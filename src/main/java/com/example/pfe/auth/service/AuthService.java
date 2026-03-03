@@ -11,7 +11,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +35,8 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        System.out.println("=== NOUVELLE INSCRIPTION ===");
-        System.out.println("Email reçu: '" + request.getEmail() + "'");
-        System.out.println("Nom: " + request.getNom());
-        System.out.println("Prénom: " + request.getPrenom());
-
+        // Vérifier si l'email existe déjà
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            System.out.println("ERREUR: Email déjà utilisé: " + request.getEmail());
             throw new RuntimeException("Email déjà utilisé");
         }
 
@@ -52,13 +46,43 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setNumTelephone(request.getNumTelephone());
-        user.setRole(Role.EN_ATTENTE);
-        user.setEstActif(false);
+        user.setRole(Role.OPERATOR);  // Rôle par défaut : en attente
+        user.setEstActif(false);       // Compte inactif en attente de validation
 
-        System.out.println("Hash du mot de passe généré: " + user.getPassword());
+        userRepository.save(user);
 
-        User savedUser = userRepository.save(user);
-        System.out.println("Utilisateur sauvegardé avec ID: " + savedUser.getId());
+        // Générer un token quand même pour permettre la redirection vers /en-attente
+        String jwtToken = jwtService.generateToken(user.getEmail());
+
+        AuthResponse response = new AuthResponse();
+        response.setToken(jwtToken);
+        response.setRole(user.getRole().name());
+        response.setNom(user.getNom());
+        response.setPrenom(user.getPrenom());
+        response.setEmail(user.getEmail());
+        response.setEstActif(false);    // Important pour le frontend
+        return response;
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException e) {
+            throw new RuntimeException("Email ou mot de passe incorrect");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        // Vérifier si le compte est actif
+        if (!user.isEstActif()) {
+            throw new DisabledException("Votre compte est en attente de validation par l'administrateur");
+        }
 
         String jwtToken = jwtService.generateToken(user.getEmail());
 
@@ -69,91 +93,6 @@ public class AuthService {
         response.setPrenom(user.getPrenom());
         response.setEmail(user.getEmail());
         response.setEstActif(user.isEstActif());
-
-        System.out.println("Inscription réussie pour: " + user.getEmail());
         return response;
-    }
-
-    public AuthResponse login(LoginRequest request) {
-        System.out.println("=================================");
-        System.out.println("=== TENTATIVE DE CONNEXION ===");
-        System.out.println("Email reçu: '" + request.getEmail() + "'");
-        System.out.println("Mot de passe reçu: '" + request.getPassword() + "'");
-        System.out.println("=================================");
-
-        try {
-            // Vérifier si l'utilisateur existe
-            User user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> {
-                        System.out.println("ERREUR: Utilisateur non trouvé: " + request.getEmail());
-                        return new UsernameNotFoundException("Utilisateur non trouvé");
-                    });
-
-            System.out.println("Utilisateur trouvé:");
-            System.out.println("  - ID: " + user.getId());
-            System.out.println("  - Email: " + user.getEmail());
-            System.out.println("  - Rôle: " + user.getRole());
-            System.out.println("  - Actif: " + user.isEstActif());
-            System.out.println("  - Hash en base: " + user.getPassword());
-
-            // Vérifier le mot de passe
-            boolean passwordMatches = passwordEncoder.matches(request.getPassword(), user.getPassword());
-            System.out.println("Vérification mot de passe: " + (passwordMatches ? "OK" : "ECHEC"));
-
-            if (!passwordMatches) {
-                System.out.println("ERREUR: Mot de passe incorrect");
-                throw new BadCredentialsException("Email ou mot de passe incorrect");
-            }
-
-            // Vérifier si le compte est actif
-            if (!user.isEstActif()) {
-                System.out.println("ERREUR: Compte non activé");
-                throw new DisabledException("Votre compte est en attente de validation");
-            }
-
-            // Authentification Spring
-            try {
-                authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(
-                                request.getEmail(),
-                                request.getPassword()
-                        )
-                );
-                System.out.println("Authentification Spring OK");
-            } catch (Exception e) {
-                System.out.println("ERREUR Spring Auth: " + e.getMessage());
-                e.printStackTrace();
-                throw e;
-            }
-
-            String jwtToken = jwtService.generateToken(user.getEmail());
-
-            AuthResponse response = new AuthResponse();
-            response.setToken(jwtToken);
-            response.setRole(user.getRole().name());
-            response.setNom(user.getNom());
-            response.setPrenom(user.getPrenom());
-            response.setEmail(user.getEmail());
-            response.setEstActif(user.isEstActif());
-
-            System.out.println("Connexion réussie pour: " + user.getEmail());
-            System.out.println("Token généré: " + jwtToken.substring(0, 20) + "...");
-
-            return response;
-
-        } catch (UsernameNotFoundException e) {
-            System.out.println("ERREUR FINALE: " + e.getMessage());
-            throw new RuntimeException("Email ou mot de passe incorrect");
-        } catch (BadCredentialsException e) {
-            System.out.println("ERREUR FINALE: " + e.getMessage());
-            throw new RuntimeException("Email ou mot de passe incorrect");
-        } catch (DisabledException e) {
-            System.out.println("ERREUR FINALE: " + e.getMessage());
-            throw new RuntimeException(e.getMessage());
-        } catch (Exception e) {
-            System.out.println("ERREUR FINALE inattendue: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Email ou mot de passe incorrect");
-        }
     }
 }

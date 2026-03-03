@@ -30,7 +30,7 @@ public class AdminService {
 
     public UserDTO getUserById(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé avec l'id: " + id));
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         return convertToDTO(user);
     }
 
@@ -38,9 +38,7 @@ public class AdminService {
     public UserDTO activerCompte(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         user.setEstActif(true);
-        // Si le rôle est encore EN_ATTENTE, on le garde, l'admin devra le changer
         User updatedUser = userRepository.save(user);
         return convertToDTO(updatedUser);
     }
@@ -49,7 +47,6 @@ public class AdminService {
     public UserDTO desactiverCompte(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         user.setEstActif(false);
         User updatedUser = userRepository.save(user);
         return convertToDTO(updatedUser);
@@ -59,12 +56,11 @@ public class AdminService {
     public UserDTO updateUserRole(Long userId, String newRole) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         try {
             Role role = Role.valueOf(newRole);
             user.setRole(role);
-            // Si on change le rôle et que le compte n'est pas actif, on l'active automatiquement
-            if (!user.isEstActif() && role != Role.EN_ATTENTE) {
+            // Si on change le rôle et que le rôle n'est pas OPERATOR, on active automatiquement
+            if (!user.isEstActif() && role != Role.OPERATOR) {
                 user.setEstActif(true);
             }
             User updatedUser = userRepository.save(user);
@@ -86,9 +82,8 @@ public class AdminService {
         return List.of(
                 Role.ADMINISTRATEUR.name(),
                 Role.RESPONSABLE_ENTREPOT.name(),
-                Role.RECEIVER.name(),
-                Role.EFFECTOR_TRANSFERT.name(),
-                Role.EN_ATTENTE.name()
+                Role.OPERATEUR_ENTREPOT.name(),
+                Role.OPERATOR.name()
         );
     }
 
