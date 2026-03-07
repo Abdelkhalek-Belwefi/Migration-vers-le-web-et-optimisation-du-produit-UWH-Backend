@@ -42,30 +42,48 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
 
                         // ===== ROUTES POUR LES ARTICLES (SPRINT 1) =====
-                        // Consultation - accessible à tous les rôles métier
                         .requestMatchers(HttpMethod.GET, "/api/articles/**").hasAnyAuthority(
                                 "RESPONSABLE_ENTREPOT",
                                 "OPERATEUR_ENTREPOT",
                                 "ADMINISTRATEUR"
                         )
 
-                        // ✅ Activation/Désactivation - accessible à ADMIN + RESPONSABLE
                         .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/activer").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
                         .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/desactiver").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
 
-                        // ✅ Création, modification, suppression - ADMIN uniquement
                         .requestMatchers(HttpMethod.POST, "/api/articles").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, "/api/articles/{id}").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, "/api/articles/**").hasAuthority("ADMINISTRATEUR")
 
-                        // Synchronisation ERP
                         .requestMatchers(HttpMethod.POST, "/api/articles/sync").permitAll()
 
-                        // ===== AUTRES ROUTES =====
+                        // ===== ROUTES POUR LES AUTRES MODULES =====
                         .requestMatchers("/api/reception/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT")
                         .requestMatchers("/api/picking/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT")
                         .requestMatchers("/api/expedition/**").hasAuthority("RESPONSABLE_ENTREPOT")
-                        .requestMatchers("/api/stock/**").hasAnyAuthority("RESPONSABLE_ENTREPOT", "OPERATEUR_ENTREPOT")
+
+                        // ===== ROUTES POUR LES STOCKS (SPRINT 2) =====
+                        // Consultation des stocks
+                        .requestMatchers(HttpMethod.GET, "/api/stocks/**").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // Mouvements (augmenter / diminuer)
+                        .requestMatchers(HttpMethod.POST, "/api/stocks/augmenter").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.POST, "/api/stocks/diminuer").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // ✅ Changement de statut - CORRIGÉ (pattern exact)
+                        .requestMatchers(HttpMethod.PUT, "/api/stocks/{id}/statut").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
 
                         .anyRequest().authenticated()
                 )
