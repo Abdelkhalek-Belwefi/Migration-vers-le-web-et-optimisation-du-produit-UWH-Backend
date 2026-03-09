@@ -8,7 +8,7 @@ public class ReceptionDTO {
 
     private Long id;
     private String numeroPO;
-    private LocalDateTime dateReception;
+    private LocalDateTime dateReception;  // ← Sans annotation
     private ReceptionStatut statut;
     private String fournisseur;
     private String bonLivraison;
@@ -18,6 +18,7 @@ public class ReceptionDTO {
     private LocalDateTime validatedAt;
     private List<ReceptionLineDTO> lignes;
 
+    // Getters et Setters...
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

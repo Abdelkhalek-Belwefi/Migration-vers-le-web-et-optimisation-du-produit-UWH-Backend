@@ -11,10 +11,11 @@ public class ReceptionLineDTO {
     private int quantiteAttendue;
     private int quantiteRecue;
     private String lot;
-    private LocalDateTime dateExpiration;
+    private LocalDateTime dateExpiration;  // ← Sans annotation
     private String emplacementDestination;
     private String statut;
 
+    // Getters et Setters...
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
