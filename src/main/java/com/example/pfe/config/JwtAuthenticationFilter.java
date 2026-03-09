@@ -1,4 +1,4 @@
-package com.example.pfe.auth.config;
+package com.example.pfe.config;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

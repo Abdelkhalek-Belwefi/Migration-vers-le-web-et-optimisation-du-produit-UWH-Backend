@@ -1,4 +1,4 @@
-package com.example.pfe.auth.config;
+package com.example.pfe.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;

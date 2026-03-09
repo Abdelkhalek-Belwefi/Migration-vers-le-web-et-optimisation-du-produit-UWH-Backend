@@ -1,4 +1,4 @@
-package com.example.pfe.auth.config;
+package com.example.pfe.config;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

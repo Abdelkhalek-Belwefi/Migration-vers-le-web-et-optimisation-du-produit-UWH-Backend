@@ -1,4 +1,4 @@
-package com.example.pfe.auth.config;
+package com.example.pfe.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,10 +35,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // ===== ROUTES PUBLIQUES =====
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Routes admin
+                        // ===== ROUTES ADMIN =====
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
 
                         // ===== ROUTES POUR LES ARTICLES (SPRINT 1) =====
@@ -47,29 +48,24 @@ public class SecurityConfig {
                                 "OPERATEUR_ENTREPOT",
                                 "ADMINISTRATEUR"
                         )
-
-                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/activer").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
-                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/desactiver").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
-
+                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/activer").hasAnyAuthority(
+                                "ADMINISTRATEUR",
+                                "RESPONSABLE_ENTREPOT"
+                        )
+                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/desactiver").hasAnyAuthority(
+                                "ADMINISTRATEUR",
+                                "RESPONSABLE_ENTREPOT"
+                        )
                         .requestMatchers(HttpMethod.POST, "/api/articles").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, "/api/articles/{id}").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, "/api/articles/**").hasAuthority("ADMINISTRATEUR")
-
                         .requestMatchers(HttpMethod.POST, "/api/articles/sync").permitAll()
 
-                        // ===== ROUTES POUR LES AUTRES MODULES =====
-                        .requestMatchers("/api/reception/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT")
-                        .requestMatchers("/api/picking/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT")
-                        .requestMatchers("/api/expedition/**").hasAuthority("RESPONSABLE_ENTREPOT")
-
                         // ===== ROUTES POUR LES STOCKS (SPRINT 2) =====
-                        // Consultation des stocks
                         .requestMatchers(HttpMethod.GET, "/api/stocks/**").hasAnyAuthority(
                                 "RESPONSABLE_ENTREPOT",
                                 "ADMINISTRATEUR"
                         )
-
-                        // Mouvements (augmenter / diminuer)
                         .requestMatchers(HttpMethod.POST, "/api/stocks/augmenter").hasAnyAuthority(
                                 "RESPONSABLE_ENTREPOT",
                                 "ADMINISTRATEUR"
@@ -78,9 +74,71 @@ public class SecurityConfig {
                                 "RESPONSABLE_ENTREPOT",
                                 "ADMINISTRATEUR"
                         )
-
-                        // ✅ Changement de statut - CORRIGÉ (pattern exact)
                         .requestMatchers(HttpMethod.PUT, "/api/stocks/{id}/statut").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // ===== ROUTES POUR LA RÉCEPTION (SPRINT 3) =====
+                        // Création et modification - opérateur uniquement
+                        .requestMatchers(HttpMethod.POST, "/api/reception/**").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.PUT, "/api/reception/lines/**").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        // Consultation - tous les rôles
+                        .requestMatchers(HttpMethod.GET, "/api/reception/**").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        // Validation - responsable uniquement
+                        .requestMatchers(HttpMethod.PUT, "/api/reception/*/valider").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // ===== ROUTES POUR LE RANGEMENT (SPRINT 4) =====
+                        // ✅ Consultation des tâches - tous les rôles
+                        .requestMatchers(HttpMethod.GET, "/api/rangement/**").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        // ✅ Actions sur les tâches - opérateur uniquement
+                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/commencer").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/terminer").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // ===== ROUTES POUR LE SERVICE GS1 =====
+                        .requestMatchers(HttpMethod.GET, "/api/gs1/**").hasAnyAuthority(
+                                "OPERATEUR_ENTREPOT",
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+
+                        // ===== ROUTES POUR LES MOUVEMENTS DE STOCK =====
+                        .requestMatchers(HttpMethod.GET, "/api/mouvements/**").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/entree").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/sortie").hasAnyAuthority(
+                                "RESPONSABLE_ENTREPOT",
+                                "ADMINISTRATEUR"
+                        )
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/transfert").hasAnyAuthority(
                                 "RESPONSABLE_ENTREPOT",
                                 "ADMINISTRATEUR"
                         )

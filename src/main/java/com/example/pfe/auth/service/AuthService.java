@@ -6,7 +6,7 @@ import com.example.pfe.auth.dto.RegisterRequest;
 import com.example.pfe.auth.entity.Role;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
-import com.example.pfe.auth.config.JwtService;
+import com.example.pfe.config.JwtService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;

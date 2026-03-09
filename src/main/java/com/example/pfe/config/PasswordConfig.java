@@ -1,4 +1,4 @@
-package com.example.pfe.auth.config;
+package com.example.pfe.config;
 
 import com.example.pfe.auth.service.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
