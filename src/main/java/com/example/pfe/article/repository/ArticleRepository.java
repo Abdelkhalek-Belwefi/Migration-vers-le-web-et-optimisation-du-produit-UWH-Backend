@@ -14,7 +14,9 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     Optional<Article> findByCodeArticleERP(String codeArticleERP);
 
-    Optional<Article> findByGtin(String gtin);  // ✅ AJOUTER CETTE LIGNE
+    Optional<Article> findByGtin(String gtin);
+
+    Optional<Article> findByNumSerie(String numSerie);
 
     List<Article> findByCategory(String category);
 
@@ -24,10 +26,12 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     boolean existsByCodeArticleERP(String codeArticleERP);
 
-    boolean existsByGtin(String gtin);  // ✅ AJOUTER CETTE LIGNE
+    boolean existsByGtin(String gtin);
+
+    boolean existsByNumSerie(String numSerie);
 
     @Query("SELECT a FROM Article a WHERE " +
-            "(:code IS NULL OR a.codeArticleERP LIKE %:code% OR a.gtin LIKE %:code%) AND " +
+            "(:code IS NULL OR a.codeArticleERP LIKE %:code% OR a.gtin LIKE %:code% OR a.numSerie LIKE %:code%) AND " +
             "(:designation IS NULL OR a.designation LIKE %:designation%) AND " +
             "(:category IS NULL OR a.category = :category) AND " +
             "(:actif IS NULL OR a.actif = :actif)")
@@ -35,4 +39,7 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
                                  @Param("designation") String designation,
                                  @Param("category") String category,
                                  @Param("actif") Boolean actif);
+
+    // La méthode deleteById est déjà fournie par JpaRepository
+    // void deleteById(Long id);
 }

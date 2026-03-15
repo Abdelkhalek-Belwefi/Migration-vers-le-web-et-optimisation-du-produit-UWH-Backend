@@ -1,12 +1,13 @@
 package com.example.pfe.article.dto;
 
+import com.example.pfe.article.entity.Article;
 import java.time.LocalDateTime;
 
 public class ArticleDTO {
-
     private Long id;
     private String codeArticleERP;
-    private String gtin;  // Nouveau champ pour GS1
+    private String gtin;
+    private String numSerie;  // 🔴 CHAMP AJOUTÉ
     private String designation;
     private String description;
     private String category;
@@ -19,10 +20,49 @@ public class ArticleDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Constructeurs
+    // Constructeur par défaut
     public ArticleDTO() {}
 
-    // Getters et Setters pour tous les champs
+    // Constructeur avec tous les champs
+    public ArticleDTO(Long id, String codeArticleERP, String gtin, String numSerie,
+                      String designation, String description, String category,
+                      String uniteMesure, double poids, double volume, String lotDefaut,
+                      Integer dureeExpirationJours, boolean actif) {
+        this.id = id;
+        this.codeArticleERP = codeArticleERP;
+        this.gtin = gtin;
+        this.numSerie = numSerie;  // 🔴
+        this.designation = designation;
+        this.description = description;
+        this.category = category;
+        this.uniteMesure = uniteMesure;
+        this.poids = poids;
+        this.volume = volume;
+        this.lotDefaut = lotDefaut;
+        this.dureeExpirationJours = dureeExpirationJours;
+        this.actif = actif;
+    }
+
+    // Constructeur depuis l'entité (TRÈS IMPORTANT)
+    public ArticleDTO(Article article) {
+        this.id = article.getId();
+        this.codeArticleERP = article.getCodeArticleERP();
+        this.gtin = article.getGtin();
+        this.numSerie = article.getNumSerie();  // 🔴 Vérifiez cette ligne
+        this.designation = article.getDesignation();
+        this.description = article.getDescription();
+        this.category = article.getCategory();
+        this.uniteMesure = article.getUniteMesure();
+        this.poids = article.getPoids();
+        this.volume = article.getVolume();
+        this.lotDefaut = article.getLotDefaut();
+        this.dureeExpirationJours = article.getDureeExpirationJours();
+        this.actif = article.isActif();
+        this.createdAt = article.getCreatedAt();
+        this.updatedAt = article.getUpdatedAt();
+    }
+
+    // Getters et Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -31,6 +71,10 @@ public class ArticleDTO {
 
     public String getGtin() { return gtin; }
     public void setGtin(String gtin) { this.gtin = gtin; }
+
+    // 🔴 Getter/Setter pour numSerie
+    public String getNumSerie() { return numSerie; }
+    public void setNumSerie(String numSerie) { this.numSerie = numSerie; }
 
     public String getDesignation() { return designation; }
     public void setDesignation(String designation) { this.designation = designation; }
@@ -64,4 +108,17 @@ public class ArticleDTO {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    @Override
+    public String toString() {
+        return "ArticleDTO{" +
+                "id=" + id +
+                ", codeArticleERP='" + codeArticleERP + '\'' +
+                ", gtin='" + gtin + '\'' +
+                ", numSerie='" + numSerie + '\'' +  // 🔴 Pour voir dans les logs
+                ", designation='" + designation + '\'' +
+                ", category='" + category + '\'' +
+                ", actif=" + actif +
+                '}';
+    }
 }

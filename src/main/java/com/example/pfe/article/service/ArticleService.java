@@ -13,73 +13,18 @@ import java.util.stream.Collectors;
 public class ArticleService {
 
     private final ArticleRepository articleRepository;
-    private final GS1ParserService gs1ParserService;
 
-    public ArticleService(ArticleRepository articleRepository,
-                          GS1ParserService gs1ParserService) {
+    public ArticleService(ArticleRepository articleRepository) {
         this.articleRepository = articleRepository;
-        this.gs1ParserService = gs1ParserService;
     }
 
-    // ========== MÉTHODES DE BASE ==========
-
+    @Transactional(readOnly = true)
     public List<ArticleDTO> getAllArticles() {
-        return articleRepository.findAll().stream()
-                .map(this::convertToDTO)
+        List<Article> articles = articleRepository.findAll();
+        return articles.stream()
+                .map(ArticleDTO::new)
                 .collect(Collectors.toList());
     }
-
-    public ArticleDTO getArticleById(Long id) {
-        Article article = articleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé avec l'id: " + id));
-        return convertToDTO(article);
-    }
-
-    public ArticleDTO getArticleByCodeERP(String codeERP) {
-        Article article = articleRepository.findByCodeArticleERP(codeERP)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé avec le code: " + codeERP));
-        return convertToDTO(article);
-    }
-
-    // ========== MÉTHODE RECHERCHE PAR GTIN ==========
-
-    public ArticleDTO findArticleByGTIN(String gtin) {
-        Article article = articleRepository.findByGtin(gtin)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé avec le GTIN: " + gtin));
-        return convertToDTO(article);
-    }
-
-    // ========== MÉTHODE GS1 ==========
-
-    /**
-     * Recherche un article par code GS1
-     * @param gs1Code Le code GS1 scanné
-     * @return L'article correspondant
-     */
-    public ArticleDTO findArticleByGS1Code(String gs1Code) {
-        // Parser le code GS1 pour extraire le GTIN
-        GS1ParserService.GS1Data gs1Data = gs1ParserService.parseGS1Code(gs1Code);
-
-        Article article = null;
-
-        // Chercher d'abord par GTIN
-        if (gs1Data.getGtin() != null && !gs1Data.getGtin().isEmpty()) {
-            article = articleRepository.findByGtin(gs1Data.getGtin()).orElse(null);
-        }
-
-        // Si pas trouvé par GTIN, chercher par code ERP
-        if (article == null) {
-            article = articleRepository.findByCodeArticleERP(gs1Code).orElse(null);
-        }
-
-        if (article == null) {
-            throw new RuntimeException("Article non trouvé pour le code GS1: " + gs1Code);
-        }
-
-        return convertToDTO(article);
-    }
-
-    // ========== MÉTHODES DE CRÉATION ==========
 
     @Transactional
     public ArticleDTO createArticle(ArticleDTO articleDTO) {
@@ -88,168 +33,156 @@ public class ArticleService {
             throw new RuntimeException("Un article avec ce code ERP existe déjà");
         }
 
-        // Vérifier si le GTIN existe déjà (s'il est fourni)
-        if (articleDTO.getGtin() != null && !articleDTO.getGtin().isEmpty()) {
-            if (articleRepository.existsByGtin(articleDTO.getGtin())) {
-                throw new RuntimeException("Un article avec ce GTIN existe déjà");
-            }
+        // Vérifier si le GTIN existe déjà (si fourni)
+        if (articleDTO.getGtin() != null && articleRepository.existsByGtin(articleDTO.getGtin())) {
+            throw new RuntimeException("Un article avec ce GTIN existe déjà");
         }
 
-        Article article = convertToEntity(articleDTO);
+        // Vérifier si le numéro de série existe déjà (si fourni)
+        if (articleDTO.getNumSerie() != null && !articleDTO.getNumSerie().isEmpty()
+                && articleRepository.existsByNumSerie(articleDTO.getNumSerie())) {
+            throw new RuntimeException("Un article avec ce numéro de série existe déjà");
+        }
+
+        Article article = new Article();
+        article.setCodeArticleERP(articleDTO.getCodeArticleERP());
+        article.setGtin(articleDTO.getGtin());
+        article.setNumSerie(articleDTO.getNumSerie());
+        article.setDesignation(articleDTO.getDesignation());
+        article.setDescription(articleDTO.getDescription());
+        article.setCategory(articleDTO.getCategory());
+        article.setUniteMesure(articleDTO.getUniteMesure());
+        article.setPoids(articleDTO.getPoids());
+        article.setVolume(articleDTO.getVolume());
+        article.setLotDefaut(articleDTO.getLotDefaut());
+        article.setDureeExpirationJours(articleDTO.getDureeExpirationJours());
+        article.setActif(articleDTO.isActif());
+
         Article savedArticle = articleRepository.save(article);
-        return convertToDTO(savedArticle);
+        return new ArticleDTO(savedArticle);
     }
 
-    // ========== MÉTHODES DE MISE À JOUR ==========
+    @Transactional(readOnly = true)
+    public ArticleDTO getArticleById(Long id) {
+        Article article = articleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec l'id: " + id));
+        return new ArticleDTO(article);
+    }
+
+    // 🔴 AJOUT DE LA MÉTHODE MANQUANTE
+    @Transactional(readOnly = true)
+    public ArticleDTO getArticleByCodeERP(String codeERP) {
+        Article article = articleRepository.findByCodeArticleERP(codeERP)
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec le code ERP: " + codeERP));
+        return new ArticleDTO(article);
+    }
 
     @Transactional
     public ArticleDTO updateArticle(Long id, ArticleDTO articleDTO) {
         Article article = articleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé"));
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec l'id: " + id));
 
-        // Vérifier si le nouveau code ERP est déjà utilisé par un autre article
-        if (!article.getCodeArticleERP().equals(articleDTO.getCodeArticleERP()) &&
-                articleRepository.existsByCodeArticleERP(articleDTO.getCodeArticleERP())) {
-            throw new RuntimeException("Un autre article avec ce code ERP existe déjà");
-        }
+        article.setCodeArticleERP(articleDTO.getCodeArticleERP());
+        article.setGtin(articleDTO.getGtin());
+        article.setNumSerie(articleDTO.getNumSerie());
+        article.setDesignation(articleDTO.getDesignation());
+        article.setDescription(articleDTO.getDescription());
+        article.setCategory(articleDTO.getCategory());
+        article.setUniteMesure(articleDTO.getUniteMesure());
+        article.setPoids(articleDTO.getPoids());
+        article.setVolume(articleDTO.getVolume());
+        article.setLotDefaut(articleDTO.getLotDefaut());
+        article.setDureeExpirationJours(articleDTO.getDureeExpirationJours());
+        article.setActif(articleDTO.isActif());
 
-        // Vérifier si le nouveau GTIN est déjà utilisé par un autre article
-        if (articleDTO.getGtin() != null && !articleDTO.getGtin().isEmpty() &&
-                !articleDTO.getGtin().equals(article.getGtin()) &&
-                articleRepository.existsByGtin(articleDTO.getGtin())) {
-            throw new RuntimeException("Un autre article avec ce GTIN existe déjà");
-        }
-
-        updateArticleFromDTO(article, articleDTO);
         Article updatedArticle = articleRepository.save(article);
-        return convertToDTO(updatedArticle);
+        return new ArticleDTO(updatedArticle);
     }
-
-    // ========== MÉTHODES D'ACTIVATION/DÉSACTIVATION ==========
 
     @Transactional
     public ArticleDTO activerArticle(Long id) {
         Article article = articleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé"));
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec l'id: " + id));
         article.setActif(true);
-        Article updatedArticle = articleRepository.save(article);
-        return convertToDTO(updatedArticle);
+        return new ArticleDTO(articleRepository.save(article));
     }
 
     @Transactional
     public ArticleDTO desactiverArticle(Long id) {
         Article article = articleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Article non trouvé"));
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec l'id: " + id));
         article.setActif(false);
-        Article updatedArticle = articleRepository.save(article);
-        return convertToDTO(updatedArticle);
+        return new ArticleDTO(articleRepository.save(article));
     }
 
-    // ========== MÉTHODES DE SUPPRESSION ==========
-
-    @Transactional
-    public void deleteArticle(Long id) {
-        if (!articleRepository.existsById(id)) {
-            throw new RuntimeException("Article non trouvé");
-        }
-        articleRepository.deleteById(id);
-    }
-
-    // ========== RECHERCHE AVANCÉE ==========
-
+    @Transactional(readOnly = true)
     public List<ArticleDTO> searchArticles(String code, String designation, String category, Boolean actif) {
-        return articleRepository.searchArticles(code, designation, category, actif).stream()
-                .map(this::convertToDTO)
+        List<Article> articles = articleRepository.searchArticles(code, designation, category, actif);
+        return articles.stream()
+                .map(ArticleDTO::new)
                 .collect(Collectors.toList());
     }
 
-    // ========== SYNCHRONISATION ERP ==========
+    @Transactional(readOnly = true)
+    public ArticleDTO findArticleByGS1Code(String gs1Code) {
+        // Extraction du GTIN (si le code contient AI 01)
+        String gtin = gs1Code;
+        if (gs1Code.contains("01")) {
+            int startIndex = gs1Code.indexOf("01") + 2;
+            if (startIndex + 14 <= gs1Code.length()) {
+                gtin = gs1Code.substring(startIndex, startIndex + 14);
+            }
+        }
+
+        Article article = articleRepository.findByGtin(gtin)
+                .orElseThrow(() -> new RuntimeException("Article non trouvé avec le code GS1: " + gs1Code));
+        return new ArticleDTO(article);
+    }
 
     @Transactional
     public ArticleDTO synchroniserDepuisERP(ArticleDTO articleDTO) {
-        // Si un GTIN est fourni, chercher par GTIN d'abord
-        if (articleDTO.getGtin() != null && !articleDTO.getGtin().isEmpty()) {
-            return articleRepository.findByGtin(articleDTO.getGtin())
-                    .map(article -> {
-                        updateArticleFromDTO(article, articleDTO);
-                        return convertToDTO(articleRepository.save(article));
-                    })
-                    .orElseGet(() -> {
-                        // Créer un nouvel article
-                        Article newArticle = convertToEntity(articleDTO);
-                        return convertToDTO(articleRepository.save(newArticle));
-                    });
+        Article article = articleRepository.findByCodeArticleERP(articleDTO.getCodeArticleERP())
+                .orElse(new Article());
+
+        article.setCodeArticleERP(articleDTO.getCodeArticleERP());
+        article.setGtin(articleDTO.getGtin());
+        article.setNumSerie(articleDTO.getNumSerie());
+        article.setDesignation(articleDTO.getDesignation());
+        article.setDescription(articleDTO.getDescription());
+        article.setCategory(articleDTO.getCategory());
+        article.setUniteMesure(articleDTO.getUniteMesure());
+        article.setPoids(articleDTO.getPoids());
+        article.setVolume(articleDTO.getVolume());
+        article.setLotDefaut(articleDTO.getLotDefaut());
+        article.setDureeExpirationJours(articleDTO.getDureeExpirationJours());
+        article.setActif(articleDTO.isActif());
+
+        return new ArticleDTO(articleRepository.save(article));
+    }
+
+    // 🔴 MÉTHODE DELETE CORRIGÉE
+    @Transactional
+    public void deleteArticle(Long id) {
+        try {
+            System.out.println("=== SUPPRESSION ARTICLE ===");
+            System.out.println("Tentative de suppression de l'article avec l'ID: " + id);
+
+            // Vérifier si l'article existe
+            if (!articleRepository.existsById(id)) {
+                System.out.println("❌ Article non trouvé avec l'ID: " + id);
+                throw new RuntimeException("Article non trouvé avec l'id: " + id);
+            }
+
+            // Supprimer l'article
+            articleRepository.deleteById(id);
+
+            System.out.println("✅ Article supprimé avec succès, ID: " + id);
+            System.out.println("=== FIN SUPPRESSION ===");
+
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors de la suppression: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Erreur lors de la suppression de l'article: " + e.getMessage());
         }
-
-        // Sinon chercher par code ERP
-        return articleRepository.findByCodeArticleERP(articleDTO.getCodeArticleERP())
-                .map(article -> {
-                    updateArticleFromDTO(article, articleDTO);
-                    return convertToDTO(articleRepository.save(article));
-                })
-                .orElseGet(() -> {
-                    Article newArticle = convertToEntity(articleDTO);
-                    return convertToDTO(articleRepository.save(newArticle));
-                });
-    }
-
-    // ========== MÉTHODES DE CONVERSION ==========
-
-    /**
-     * Convertit une entité Article en DTO
-     */
-    private ArticleDTO convertToDTO(Article article) {
-        ArticleDTO dto = new ArticleDTO();
-        dto.setId(article.getId());
-        dto.setCodeArticleERP(article.getCodeArticleERP());
-        dto.setGtin(article.getGtin());
-        dto.setDesignation(article.getDesignation());
-        dto.setDescription(article.getDescription());
-        dto.setCategory(article.getCategory());
-        dto.setUniteMesure(article.getUniteMesure());
-        dto.setPoids(article.getPoids());
-        dto.setVolume(article.getVolume());
-        dto.setLotDefaut(article.getLotDefaut());
-        dto.setDureeExpirationJours(article.getDureeExpirationJours());
-        dto.setActif(article.isActif());
-        dto.setCreatedAt(article.getCreatedAt());
-        dto.setUpdatedAt(article.getUpdatedAt());
-        return dto;
-    }
-
-    /**
-     * Convertit un DTO en entité Article
-     */
-    private Article convertToEntity(ArticleDTO dto) {
-        Article article = new Article();
-        article.setCodeArticleERP(dto.getCodeArticleERP());
-        article.setGtin(dto.getGtin());
-        article.setDesignation(dto.getDesignation());
-        article.setDescription(dto.getDescription());
-        article.setCategory(dto.getCategory());
-        article.setUniteMesure(dto.getUniteMesure());
-        article.setPoids(dto.getPoids());
-        article.setVolume(dto.getVolume());
-        article.setLotDefaut(dto.getLotDefaut());
-        article.setDureeExpirationJours(dto.getDureeExpirationJours());
-        article.setActif(dto.isActif());
-        return article;
-    }
-
-    /**
-     * Met à jour une entité Article à partir d'un DTO
-     */
-    private void updateArticleFromDTO(Article article, ArticleDTO dto) {
-        article.setCodeArticleERP(dto.getCodeArticleERP());
-        article.setGtin(dto.getGtin());
-        article.setDesignation(dto.getDesignation());
-        article.setDescription(dto.getDescription());
-        article.setCategory(dto.getCategory());
-        article.setUniteMesure(dto.getUniteMesure());
-        article.setPoids(dto.getPoids());
-        article.setVolume(dto.getVolume());
-        article.setLotDefaut(dto.getLotDefaut());
-        article.setDureeExpirationJours(dto.getDureeExpirationJours());
-        article.setActif(dto.isActif());
     }
 }

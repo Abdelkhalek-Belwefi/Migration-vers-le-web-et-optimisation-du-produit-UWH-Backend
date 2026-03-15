@@ -8,15 +8,19 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     List<Stock> findByArticleId(Long articleId);
+
     List<Stock> findByEmplacementContainingIgnoreCase(String emplacement);
-    Optional<Stock> findByLot(String lot);
+
+    // Changé de Optional à List pour éviter l'erreur de non-unicité
+    List<Stock> findByLot(String lot);
+
     List<Stock> findByStatut(StockStatut statut);
+
     boolean existsByLot(String lot);
 
     @Query("SELECT s FROM Stock s WHERE " +

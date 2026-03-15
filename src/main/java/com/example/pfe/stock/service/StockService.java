@@ -24,7 +24,7 @@ public class StockService {
         this.articleRepository = articleRepository;
     }
 
-    // --- Consultation (accessible uniquement à RESPONSABLE et ADMIN) ---
+    // --- Consultation ---
     public List<StockDTO> getAllStocks() {
         return stockRepository.findAll().stream()
                 .map(this::convertToDTO)
@@ -46,10 +46,18 @@ public class StockService {
                 .collect(Collectors.toList());
     }
 
+    // Méthode adaptée pour gérer plusieurs stocks avec le même lot
     public StockDTO getStockByLot(String lot) {
-        Stock stock = stockRepository.findByLot(lot)
-                .orElseThrow(() -> new RuntimeException("Aucun stock trouvé pour le lot: " + lot));
-        return convertToDTO(stock);
+        List<Stock> stocks = stockRepository.findByLot(lot);
+        if (stocks.isEmpty()) {
+            throw new RuntimeException("Aucun stock trouvé pour le lot: " + lot);
+        }
+        if (stocks.size() > 1) {
+            // En cas de doublon, on retourne le premier mais on avertit
+            System.out.println("⚠️ Attention : plusieurs stocks trouvés pour le lot " + lot +
+                    ". Retour du premier (ID: " + stocks.get(0).getId() + ").");
+        }
+        return convertToDTO(stocks.get(0));
     }
 
     public List<StockDTO> searchStocks(Long articleId, String lot, String emplacement, StockStatut statut) {
@@ -58,13 +66,14 @@ public class StockService {
                 .collect(Collectors.toList());
     }
 
-    // --- Mouvements (accessibles à OPERATEUR, RESPONSABLE, ADMIN) ---
+    // --- Mouvements ---
     @Transactional
     public StockDTO augmenterQuantite(Long articleId, String lot, String emplacement, int quantite,
                                       LocalDateTime dateExpiration, StockStatut statut) {
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
 
+        // Recherche d'un stock existant avec le même article, lot et emplacement
         Stock stock = stockRepository.findByLot(lot)
                 .stream()
                 .filter(s -> s.getArticle().getId().equals(articleId)
@@ -103,10 +112,11 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
-    // --- Changement de statut (réservé à RESPONSABLE et ADMIN) ---
+    // --- Changement de statut ---
     @Transactional
     public StockDTO changerStatut(Long stockId, StockStatut nouveauStatut) {
-        Stock stock = stockRepository.findById(stockId).orElseThrow(() -> new RuntimeException("Stock non trouvé"));
+        Stock stock = stockRepository.findById(stockId)
+                .orElseThrow(() -> new RuntimeException("Stock non trouvé"));
         stock.setStatut(nouveauStatut);
         return convertToDTO(stockRepository.save(stock));
     }

@@ -12,10 +12,14 @@ public class Article {
     private Long id;
 
     @Column(name = "code_article_erp", unique = true, nullable = false)
-    private String codeArticleERP;  // Code interne ERP
+    private String codeArticleERP;
 
     @Column(name = "gtin", length = 14)
-    private String gtin;  // Code GS1 (AI 01) - 14 chiffres
+    private String gtin;
+
+    // 🔴 CORRECTION IMPORTANTE - Vérifiez cette annotation
+    @Column(name = "num_serie", length = 50, unique = true)
+    private String numSerie;  // Le nom de la variable doit correspondre au getter/setter
 
     @Column(nullable = false)
     private String designation;
@@ -23,20 +27,25 @@ public class Article {
     @Column(length = 500)
     private String description;
 
+    @Column(name = "category")
     private String category;
 
     @Column(name = "unite_mesure")
     private String uniteMesure;
 
+    @Column(name = "poids")
     private double poids;
+
+    @Column(name = "volume")
     private double volume;
 
     @Column(name = "lot_defaut", length = 20)
-    private String lotDefaut;  // Lot par défaut pour l'article
+    private String lotDefaut;
 
     @Column(name = "duree_expiration_jours")
-    private Integer dureeExpirationJours;  // Délai de péremption en jours
+    private Integer dureeExpirationJours;
 
+    @Column(name = "actif")
     private boolean actif = true;
 
     @Column(name = "created_at")
@@ -59,7 +68,17 @@ public class Article {
     // Constructeurs
     public Article() {}
 
-    // Getters et Setters
+    public Article(String codeArticleERP, String gtin, String numSerie, String designation,
+                   String category, String uniteMesure) {
+        this.codeArticleERP = codeArticleERP;
+        this.gtin = gtin;
+        this.numSerie = numSerie;
+        this.designation = designation;
+        this.category = category;
+        this.uniteMesure = uniteMesure;
+    }
+
+    // Getters et Setters - TOUS DOIVENT EXISTER
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -68,6 +87,10 @@ public class Article {
 
     public String getGtin() { return gtin; }
     public void setGtin(String gtin) { this.gtin = gtin; }
+
+    // 🔴 Getter/Setter pour numSerie - Vérifiez ces méthodes
+    public String getNumSerie() { return numSerie; }
+    public void setNumSerie(String numSerie) { this.numSerie = numSerie; }
 
     public String getDesignation() { return designation; }
     public void setDesignation(String designation) { this.designation = designation; }
