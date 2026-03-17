@@ -96,4 +96,13 @@ public class ReceptionController {
     public ResponseEntity<List<PutawayTaskDTO>> getAllPutawayTasks() {
         return ResponseEntity.ok(receptionService.getAllPutawayTasks());
     }
+
+    // 🔹 NOUVEL ENDPOINT : Récupérer les informations d'un document scanné
+    @GetMapping("/document/{code}")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<ReceptionDTO> getDocumentInfo(@PathVariable String code) {
+        System.out.println("=== RECHERCHE DOCUMENT ===");
+        System.out.println("Code scanné: " + code);
+        return ResponseEntity.ok(receptionService.getDocumentInfo(code));
+    }
 }

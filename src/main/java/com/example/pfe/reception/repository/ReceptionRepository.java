@@ -9,13 +9,12 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface ReceptionRepository extends JpaRepository<Reception, Long> {
 
-    // ✅ Retourne Optional (0 ou 1 résultat)
-    Optional<Reception> findByNumeroPO(String numeroPO);
+    // ✅ Changé de Optional à List pour permettre plusieurs réceptions avec le même PO
+    List<Reception> findByNumeroPO(String numeroPO);
 
     List<Reception> findByStatut(ReceptionStatut statut);
 

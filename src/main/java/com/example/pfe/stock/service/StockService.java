@@ -19,6 +19,9 @@ public class StockService {
     private final StockRepository stockRepository;
     private final ArticleRepository articleRepository;
 
+    // Seuil de blocage automatique
+    private static final int SEUIL_BLOCAGE = 1000;
+
     public StockService(StockRepository stockRepository, ArticleRepository articleRepository) {
         this.stockRepository = stockRepository;
         this.articleRepository = articleRepository;
@@ -46,14 +49,12 @@ public class StockService {
                 .collect(Collectors.toList());
     }
 
-    // Méthode adaptée pour gérer plusieurs stocks avec le même lot
     public StockDTO getStockByLot(String lot) {
         List<Stock> stocks = stockRepository.findByLot(lot);
         if (stocks.isEmpty()) {
             throw new RuntimeException("Aucun stock trouvé pour le lot: " + lot);
         }
         if (stocks.size() > 1) {
-            // En cas de doublon, on retourne le premier mais on avertit
             System.out.println("⚠️ Attention : plusieurs stocks trouvés pour le lot " + lot +
                     ". Retour du premier (ID: " + stocks.get(0).getId() + ").");
         }
@@ -73,7 +74,6 @@ public class StockService {
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
 
-        // Recherche d'un stock existant avec le même article, lot et emplacement
         Stock stock = stockRepository.findByLot(lot)
                 .stream()
                 .filter(s -> s.getArticle().getId().equals(articleId)
@@ -81,19 +81,27 @@ public class StockService {
                 .findFirst()
                 .orElse(null);
 
+        int nouvelleQuantite;
         if (stock != null) {
-            stock.setQuantite(stock.getQuantite() + quantite);
+            nouvelleQuantite = stock.getQuantite() + quantite;
+            stock.setQuantite(nouvelleQuantite);
             if (dateExpiration != null) stock.setDateExpiration(dateExpiration);
-            if (statut != null) stock.setStatut(statut);
         } else {
+            nouvelleQuantite = quantite;
             stock = new Stock();
             stock.setArticle(article);
             stock.setLot(lot);
             stock.setEmplacement(emplacement);
             stock.setQuantite(quantite);
-            stock.setStatut(statut != null ? statut : StockStatut.DISPONIBLE);
             stock.setDateReception(LocalDateTime.now());
             stock.setDateExpiration(dateExpiration);
+        }
+
+        // 🔴 Règle métier : si la quantité dépasse le seuil, bloquer automatiquement
+        if (nouvelleQuantite >= SEUIL_BLOCAGE) {
+            stock.setStatut(StockStatut.BLOQUE);
+        } else {
+            stock.setStatut(statut != null ? statut : StockStatut.DISPONIBLE);
         }
 
         return convertToDTO(stockRepository.save(stock));
@@ -103,6 +111,11 @@ public class StockService {
     public StockDTO diminuerQuantite(Long stockId, int quantite) {
         Stock stock = stockRepository.findById(stockId)
                 .orElseThrow(() -> new RuntimeException("Stock non trouvé"));
+
+        // 🔴 Interdire la diminution si le stock est bloqué
+        if (stock.getStatut() == StockStatut.BLOQUE) {
+            throw new RuntimeException("Impossible de diminuer un stock bloqué");
+        }
 
         if (stock.getQuantite() < quantite) {
             throw new RuntimeException("Quantité insuffisante. Disponible: " + stock.getQuantite());

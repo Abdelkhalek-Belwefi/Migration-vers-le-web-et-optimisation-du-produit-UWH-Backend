@@ -5,6 +5,7 @@ import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.stock.dto.MouvementStockDTO;
 import com.example.pfe.stock.entity.MouvementStock;
 import com.example.pfe.stock.entity.Stock;
+import com.example.pfe.stock.entity.StockStatut;
 import com.example.pfe.stock.repository.MouvementStockRepository;
 import com.example.pfe.stock.repository.StockRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -70,15 +71,18 @@ public class MouvementStockService {
 
         System.out.println("=== TRANSFERT STOCK ===");
 
-        // 1. Récupérer le stock source
         Stock stockSource = stockRepository.findById(stockIdSource)
                 .orElseThrow(() -> new RuntimeException("Stock source non trouvé"));
+
+        // 🔴 Interdire le transfert si le stock source est bloqué
+        if (stockSource.getStatut() == StockStatut.BLOQUE) {
+            throw new RuntimeException("Impossible de transférer un stock bloqué");
+        }
 
         if (stockSource.getQuantite() < quantite) {
             throw new RuntimeException("Quantité insuffisante. Disponible: " + stockSource.getQuantite());
         }
 
-        // 2. Chercher le stock destination
         Stock stockDestination = stockRepository.findByLot(stockSource.getLot())
                 .stream()
                 .filter(s -> s.getArticle().getId().equals(stockSource.getArticle().getId())
@@ -89,13 +93,10 @@ public class MouvementStockService {
         int ancienneQteSource = stockSource.getQuantite();
         Integer ancienneQteDest = null;
 
-        // 3. Diminuer la quantité dans le stock source
         stockSource.setQuantite(ancienneQteSource - quantite);
         stockRepository.save(stockSource);
 
-        // 4. Gérer le stock destination
         if (stockDestination == null) {
-            // Créer un nouveau stock
             stockDestination = new Stock();
             stockDestination.setArticle(stockSource.getArticle());
             stockDestination.setLot(stockSource.getLot());
@@ -105,14 +106,12 @@ public class MouvementStockService {
             stockDestination.setDateExpiration(stockSource.getDateExpiration());
             stockDestination.setDateReception(stockSource.getDateReception());
             stockRepository.save(stockDestination);
-            // ancienneQteDest reste null
         } else {
             ancienneQteDest = stockDestination.getQuantite();
             stockDestination.setQuantite(ancienneQteDest + quantite);
             stockRepository.save(stockDestination);
         }
 
-        // 5. Enregistrer le mouvement
         return enregistrerMouvement(stockSource, stockDestination, "TRANSFERT", quantite,
                 ancienneQteSource, stockSource.getQuantite(),
                 ancienneQteDest, stockDestination.getQuantite(),
@@ -164,7 +163,7 @@ public class MouvementStockService {
             if (principal instanceof UserDetails) {
                 String email = ((UserDetails) principal).getUsername();
                 return userRepository.findByEmail(email)
-                        .orElse(null); // Retourner null si non trouvé
+                        .orElse(null);
             }
         } catch (Exception e) {
             System.out.println("Erreur récupération utilisateur: " + e.getMessage());

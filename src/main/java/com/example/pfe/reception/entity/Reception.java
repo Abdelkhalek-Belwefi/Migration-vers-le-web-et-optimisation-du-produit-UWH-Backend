@@ -14,7 +14,7 @@ public class Reception {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "numero_po", nullable = false, unique = true)
+    @Column(name = "numero_po", nullable = false)  // Pas de unique = true
     private String numeroPO;          // Purchase Order number
 
     @Column(name = "date_reception")
@@ -54,7 +54,7 @@ public class Reception {
         }
     }
 
-    // --- Getters et Setters ---
+    // Getters et Setters (inchangés)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

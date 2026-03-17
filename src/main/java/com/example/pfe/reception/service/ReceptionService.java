@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,9 +55,12 @@ public class ReceptionService {
         System.out.println("=== CRÉATION RÉCEPTION ===");
         System.out.println("Numéro PO: " + receptionDTO.getNumeroPO());
 
-        Optional<Reception> existing = receptionRepository.findByNumeroPO(receptionDTO.getNumeroPO());
-        if (existing.isPresent()) {
-            throw new RuntimeException("Un bon de commande avec ce numéro existe déjà (ID: " + existing.get().getId() + ")");
+        // 🔴 MODIFICATION : on vérifie s'il existe déjà, mais on autorise la création
+        List<Reception> existingList = receptionRepository.findByNumeroPO(receptionDTO.getNumeroPO());
+        if (!existingList.isEmpty()) {
+            System.out.println("⚠️ Le PO " + receptionDTO.getNumeroPO() + " existe déjà (IDs: "
+                    + existingList.stream().map(r -> r.getId().toString()).collect(Collectors.joining(", "))
+                    + "). Création d'une nouvelle réception.");
         }
 
         User currentUser = getCurrentUser();
@@ -98,14 +100,21 @@ public class ReceptionService {
         return convertToDTO(reception);
     }
 
+    // 🔴 MODIFICATION : gestion de plusieurs réceptions pour un même PO
     public ReceptionDTO getReceptionByPO(String numeroPO) {
-        Optional<Reception> optionalReception = receptionRepository.findByNumeroPO(numeroPO);
+        List<Reception> receptions = receptionRepository.findByNumeroPO(numeroPO);
 
-        if (optionalReception.isEmpty()) {
+        if (receptions.isEmpty()) {
             throw new RuntimeException("Aucune réception trouvée pour le PO: " + numeroPO);
         }
 
-        return convertToDTO(optionalReception.get());
+        if (receptions.size() > 1) {
+            System.out.println("⚠️ Plusieurs réceptions trouvées pour le PO " + numeroPO
+                    + ". Retour de la plus récente (ID: " + receptions.get(receptions.size()-1).getId() + ")");
+            return convertToDTO(receptions.get(receptions.size()-1));
+        }
+
+        return convertToDTO(receptions.get(0));
     }
 
     public List<ReceptionDTO> searchReceptions(String numeroPO, String fournisseur, ReceptionStatut statut) {
@@ -360,5 +369,34 @@ public class ReceptionService {
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé avec l'email: " + email));
         }
         return null;
+    }
+
+    // 🔹 NOUVELLE MÉTHODE : Traiter un code de document scanné
+    public ReceptionDTO getDocumentInfo(String code) {
+        System.out.println("🔍 Traitement du document scanné: " + code);
+
+        // Pour l'instant, on fait une recherche simple à partir du code
+        // On peut imaginer que le code contient directement le numéro de BL ou de PO
+        // Si le code commence par "PO-", on cherche une réception existante
+        if (code.toUpperCase().startsWith("PO-")) {
+            try {
+                return getReceptionByPO(code);
+            } catch (RuntimeException e) {
+                // Si aucune réception trouvée, on crée un DTO avec le PO
+                ReceptionDTO dto = new ReceptionDTO();
+                dto.setNumeroPO(code);
+                return dto;
+            }
+        } else if (code.toUpperCase().startsWith("BL-")) {
+            // Pour un BL, on crée un DTO avec le numéro de BL
+            ReceptionDTO dto = new ReceptionDTO();
+            dto.setBonLivraison(code);
+            return dto;
+        } else {
+            // Sinon, on retourne un DTO avec le code comme bon de livraison
+            ReceptionDTO dto = new ReceptionDTO();
+            dto.setBonLivraison(code);
+            return dto;
+        }
     }
 }
