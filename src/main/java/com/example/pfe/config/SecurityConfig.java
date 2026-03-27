@@ -38,6 +38,8 @@ public class SecurityConfig {
                         // ===== ROUTES PUBLIQUES =====
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        // 🔥 Ajout pour OCR
+                        .requestMatchers(HttpMethod.POST, "/api/ocr/extract").permitAll()
 
                         // ===== ROUTES ADMIN =====
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
