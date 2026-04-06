@@ -7,7 +7,7 @@ public class ArticleDTO {
     private Long id;
     private String codeArticleERP;
     private String gtin;
-    private String numSerie;  // 🔴 CHAMP AJOUTÉ
+    private String numSerie;
     private String designation;
     private String description;
     private String category;
@@ -17,38 +17,18 @@ public class ArticleDTO {
     private String lotDefaut;
     private Integer dureeExpirationJours;
     private boolean actif;
+    private Double prixUnitaire;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Constructeur par défaut
+    // Constructeurs, getters, setters
     public ArticleDTO() {}
 
-    // Constructeur avec tous les champs
-    public ArticleDTO(Long id, String codeArticleERP, String gtin, String numSerie,
-                      String designation, String description, String category,
-                      String uniteMesure, double poids, double volume, String lotDefaut,
-                      Integer dureeExpirationJours, boolean actif) {
-        this.id = id;
-        this.codeArticleERP = codeArticleERP;
-        this.gtin = gtin;
-        this.numSerie = numSerie;  // 🔴
-        this.designation = designation;
-        this.description = description;
-        this.category = category;
-        this.uniteMesure = uniteMesure;
-        this.poids = poids;
-        this.volume = volume;
-        this.lotDefaut = lotDefaut;
-        this.dureeExpirationJours = dureeExpirationJours;
-        this.actif = actif;
-    }
-
-    // Constructeur depuis l'entité (TRÈS IMPORTANT)
     public ArticleDTO(Article article) {
         this.id = article.getId();
         this.codeArticleERP = article.getCodeArticleERP();
         this.gtin = article.getGtin();
-        this.numSerie = article.getNumSerie();  // 🔴 Vérifiez cette ligne
+        this.numSerie = article.getNumSerie();
         this.designation = article.getDesignation();
         this.description = article.getDescription();
         this.category = article.getCategory();
@@ -58,11 +38,12 @@ public class ArticleDTO {
         this.lotDefaut = article.getLotDefaut();
         this.dureeExpirationJours = article.getDureeExpirationJours();
         this.actif = article.isActif();
+        this.prixUnitaire = article.getPrixUnitaire();
         this.createdAt = article.getCreatedAt();
         this.updatedAt = article.getUpdatedAt();
     }
 
-    // Getters et Setters
+    // Getters et setters (à générer)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -72,7 +53,6 @@ public class ArticleDTO {
     public String getGtin() { return gtin; }
     public void setGtin(String gtin) { this.gtin = gtin; }
 
-    // 🔴 Getter/Setter pour numSerie
     public String getNumSerie() { return numSerie; }
     public void setNumSerie(String numSerie) { this.numSerie = numSerie; }
 
@@ -103,22 +83,12 @@ public class ArticleDTO {
     public boolean isActif() { return actif; }
     public void setActif(boolean actif) { this.actif = actif; }
 
+    public Double getPrixUnitaire() { return prixUnitaire; }
+    public void setPrixUnitaire(Double prixUnitaire) { this.prixUnitaire = prixUnitaire; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-
-    @Override
-    public String toString() {
-        return "ArticleDTO{" +
-                "id=" + id +
-                ", codeArticleERP='" + codeArticleERP + '\'' +
-                ", gtin='" + gtin + '\'' +
-                ", numSerie='" + numSerie + '\'' +  // 🔴 Pour voir dans les logs
-                ", designation='" + designation + '\'' +
-                ", category='" + category + '\'' +
-                ", actif=" + actif +
-                '}';
-    }
 }

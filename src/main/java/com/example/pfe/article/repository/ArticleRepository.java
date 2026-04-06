@@ -2,18 +2,11 @@ package com.example.pfe.article.repository;
 
 import com.example.pfe.article.entity.Article;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
 import java.util.Optional;
 
-@Repository
 public interface ArticleRepository extends JpaRepository<Article, Long> {
-
+    Optional<Article> findByCode(String code);
     Optional<Article> findByCodeArticleERP(String codeArticleERP);
-
     Optional<Article> findByGtin(String gtin);
 
     Optional<Article> findByNumSerie(String numSerie);
@@ -46,5 +39,6 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     // Ajouter cette méthode dans l’interface ArticleRepository
     boolean existsByCategory(String category);
+
 
 }

@@ -20,73 +20,57 @@ public class ArticleController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL')")
     public ResponseEntity<List<ArticleDTO>> getAllArticles() {
         return ResponseEntity.ok(articleService.getAllArticles());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL')")
     public ResponseEntity<ArticleDTO> getArticleById(@PathVariable Long id) {
         return ResponseEntity.ok(articleService.getArticleById(id));
     }
 
     @GetMapping("/code/{codeERP}")
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL')")
     public ResponseEntity<ArticleDTO> getArticleByCodeERP(@PathVariable String codeERP) {
         return ResponseEntity.ok(articleService.getArticleByCodeERP(codeERP));
     }
 
-    @GetMapping("/gs1/{gs1Code}")
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<ArticleDTO> findArticleByGS1Code(@PathVariable String gs1Code) {
-        return ResponseEntity.ok(articleService.findArticleByGS1Code(gs1Code));
+    @GetMapping("/gs1/{gtin}")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL')")
+    public ResponseEntity<ArticleDTO> getArticleByGTIN(@PathVariable String gtin) {
+        return ResponseEntity.ok(articleService.getArticleByGTIN(gtin));
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('ADMINISTRATEUR')")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     public ResponseEntity<ArticleDTO> createArticle(@RequestBody ArticleDTO articleDTO) {
         return ResponseEntity.ok(articleService.createArticle(articleDTO));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMINISTRATEUR')")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     public ResponseEntity<ArticleDTO> updateArticle(@PathVariable Long id, @RequestBody ArticleDTO articleDTO) {
         return ResponseEntity.ok(articleService.updateArticle(id, articleDTO));
     }
 
-    @PutMapping("/{id}/activer")
-    @PreAuthorize("hasAnyAuthority('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT')")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    public ResponseEntity<Void> deleteArticle(@PathVariable Long id) {
+        articleService.deleteArticle(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/activer")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     public ResponseEntity<ArticleDTO> activerArticle(@PathVariable Long id) {
         return ResponseEntity.ok(articleService.activerArticle(id));
     }
 
-    @PutMapping("/{id}/desactiver")
-    @PreAuthorize("hasAnyAuthority('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT')")
+    @PatchMapping("/{id}/desactiver")
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     public ResponseEntity<ArticleDTO> desactiverArticle(@PathVariable Long id) {
         return ResponseEntity.ok(articleService.desactiverArticle(id));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMINISTRATEUR')")
-    public ResponseEntity<Void> deleteArticle(@PathVariable Long id) {
-        articleService.deleteArticle(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ArticleDTO>> searchArticles(
-            @RequestParam(required = false) String code,
-            @RequestParam(required = false) String designation,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) Boolean actif) {
-        return ResponseEntity.ok(articleService.searchArticles(code, designation, category, actif));
-    }
-
-    @PostMapping("/sync")
-    @PreAuthorize("permitAll()")
-    public ResponseEntity<ArticleDTO> synchroniserDepuisERP(@RequestBody ArticleDTO articleDTO) {
-        return ResponseEntity.ok(articleService.synchroniserDepuisERP(articleDTO));
     }
 }

@@ -38,112 +38,68 @@ public class SecurityConfig {
                         // ===== ROUTES PUBLIQUES =====
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        // 🔥 Ajout pour OCR
                         .requestMatchers(HttpMethod.POST, "/api/ocr/extract").permitAll()
 
                         // ===== ROUTES ADMIN =====
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
 
-                        // ===== ROUTES POUR LES ARTICLES (SPRINT 1) =====
+                        // ===== ARTICLES =====
                         .requestMatchers(HttpMethod.GET, "/api/articles/**").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "OPERATEUR_ENTREPOT",
-                                "ADMINISTRATEUR"
+                                "RESPONSABLE_ENTREPOT", "OPERATEUR_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL"
                         )
-                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/activer").hasAnyAuthority(
-                                "ADMINISTRATEUR",
-                                "RESPONSABLE_ENTREPOT"
-                        )
-                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/desactiver").hasAnyAuthority(
-                                "ADMINISTRATEUR",
-                                "RESPONSABLE_ENTREPOT"
-                        )
+                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/activer").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
+                        .requestMatchers(HttpMethod.PUT, "/api/articles/{id}/desactiver").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
                         .requestMatchers(HttpMethod.POST, "/api/articles").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, "/api/articles/{id}").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, "/api/articles/**").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.POST, "/api/articles/sync").permitAll()
 
-                        // ===== ROUTES POUR LES STOCKS (SPRINT 2) =====
+                        // ===== STOCKS =====
                         .requestMatchers(HttpMethod.GET, "/api/stocks/**").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
+                                "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL"
                         )
-                        .requestMatchers(HttpMethod.POST, "/api/stocks/augmenter").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        .requestMatchers(HttpMethod.POST, "/api/stocks/diminuer").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        .requestMatchers(HttpMethod.PUT, "/api/stocks/{id}/statut").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
+                        .requestMatchers(HttpMethod.POST, "/api/stocks/augmenter").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/stocks/diminuer").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/stocks/{id}/statut").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
 
-                        // ===== ROUTES POUR LA RÉCEPTION (SPRINT 3) =====
-                        // Création et modification - opérateur uniquement
-                        .requestMatchers(HttpMethod.POST, "/api/reception/**").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        .requestMatchers(HttpMethod.PUT, "/api/reception/lines/**").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        // Consultation - tous les rôles
-                        .requestMatchers(HttpMethod.GET, "/api/reception/**").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        // Validation - responsable uniquement
-                        .requestMatchers(HttpMethod.PUT, "/api/reception/*/valider").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
+                        // ===== RÉCEPTION =====
+                        .requestMatchers(HttpMethod.POST, "/api/reception/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/reception/lines/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.GET, "/api/reception/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/reception/*/valider").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
 
-                        // ===== ROUTES POUR LE RANGEMENT (SPRINT 4) =====
-                        // ✅ Consultation des tâches - tous les rôles
-                        .requestMatchers(HttpMethod.GET, "/api/rangement/**").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        // ✅ Actions sur les tâches - opérateur uniquement
-                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/commencer").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
-                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/terminer").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
+                        // ===== RANGEMENT =====
+                        .requestMatchers(HttpMethod.GET, "/api/rangement/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/commencer").hasAnyAuthority("OPERATEUR_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/rangement/*/terminer").hasAnyAuthority("OPERATEUR_ENTREPOT", "ADMINISTRATEUR")
 
-                        // ===== ROUTES POUR LE SERVICE GS1 =====
-                        .requestMatchers(HttpMethod.GET, "/api/gs1/**").hasAnyAuthority(
-                                "OPERATEUR_ENTREPOT",
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
+                        // ===== SERVICE GS1 =====
+                        .requestMatchers(HttpMethod.GET, "/api/gs1/**").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
 
-                        // ===== ROUTES POUR LES MOUVEMENTS DE STOCK =====
+                        // ===== MOUVEMENTS =====
                         .requestMatchers(HttpMethod.GET, "/api/mouvements/**").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
+                                "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL"
                         )
-                        .requestMatchers(HttpMethod.POST, "/api/mouvements/entree").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/entree").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/sortie").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/mouvements/transfert").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+
+                        // ===== CLIENTS =====
+                        .requestMatchers("/api/clients/**").hasAnyAuthority("SERVICE_COMMERCIAL", "ADMINISTRATEUR")
+
+                        // ===== COMMANDES =====
+                        .requestMatchers(HttpMethod.GET, "/api/commandes/**").hasAnyAuthority(
+                                "SERVICE_COMMERCIAL", "ADMINISTRATEUR", "OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT"
                         )
-                        .requestMatchers(HttpMethod.POST, "/api/mouvements/sortie").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
+                        .requestMatchers(HttpMethod.POST, "/api/commandes/**").hasAnyAuthority("SERVICE_COMMERCIAL", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PUT, "/api/commandes/**").hasAnyAuthority("SERVICE_COMMERCIAL", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/commandes/**").hasAnyAuthority(
+                                "SERVICE_COMMERCIAL", "ADMINISTRATEUR", "OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT"
                         )
-                        .requestMatchers(HttpMethod.POST, "/api/mouvements/transfert").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT",
-                                "ADMINISTRATEUR"
-                        )
+                        .requestMatchers(HttpMethod.DELETE, "/api/commandes/**").hasAnyAuthority("SERVICE_COMMERCIAL", "ADMINISTRATEUR")
+
+                        // ===== EXPÉDITIONS =====
+                        .requestMatchers("/api/expeditions/**").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
 
                         .anyRequest().authenticated()
                 )
