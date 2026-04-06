@@ -72,32 +72,20 @@ public class OcrService {
 
         Map<String, String> result = new HashMap<>();
 
-        // ===== RECONSTRUCTION DES NUMÉROS COMPLETS =====
+        // ===== RECONSTRUCTION DES NUMÉROS COMPLETS (CORRIGÉ) =====
 
-        // 1. Chercher tous les nombres dans le texte
-        Pattern numberPattern = Pattern.compile("(\\d{4}[-]?\\d{4})");
-        Matcher numberMatcher = numberPattern.matcher(extractedText);
-        String foundNumber = "";
-        while (numberMatcher.find()) {
-            foundNumber = numberMatcher.group(1);
-            System.out.println("Nombre trouvé: " + foundNumber);
+        // 1. Détection du Numéro PO (cherche PO- suivi de chiffres ou tirets)
+        Pattern poPattern = Pattern.compile("PO-?([0-9\\-]+)");
+        Matcher poMatcher = poPattern.matcher(extractedText);
+        if (poMatcher.find()) {
+            result.put("numeroPO", poMatcher.group(0)); // group(0) récupère "PO-XXXX"
         }
 
-        // 2. Chercher les préfixes PO et BL
-        if (extractedText.contains("PO-2025") || extractedText.contains("PO-2025")) {
-            if (!foundNumber.isEmpty()) {
-                result.put("numeroPO", "PO-" + foundNumber);
-            } else {
-                result.put("numeroPO", "PO-2025"); // fallback
-            }
-        }
-
-        if (extractedText.contains("BL-2025") || extractedText.contains("BL-2025")) {
-            if (!foundNumber.isEmpty()) {
-                result.put("bonLivraison", "BL-" + foundNumber);
-            } else {
-                result.put("bonLivraison", "BL-2025"); // fallback
-            }
+        // 2. Détection du Bon de Livraison (cherche BL- suivi de chiffres ou tirets)
+        Pattern blPattern = Pattern.compile("BL-?([0-9\\-]+)");
+        Matcher blMatcher = blPattern.matcher(extractedText);
+        if (blMatcher.find()) {
+            result.put("bonLivraison", blMatcher.group(0)); // group(0) récupère "BL-XXXX"
         }
 
         // 3. Fournisseur - corriger "LOGISTIQUEEXPRESS"
@@ -106,7 +94,6 @@ public class OcrService {
             ligne = ligne.trim();
             if (ligne.contains("LOGISTIQUE") || ligne.contains("EXPRESS") || ligne.contains("DUPONT")) {
                 String fournisseur = ligne.replaceAll("FOURNISSEUR\\s*:?\\s*", "").trim();
-                // Ajouter un espace entre les mots collés
                 fournisseur = fournisseur.replaceAll("([A-Z])([A-Z][a-z])", "$1 $2");
                 fournisseur = fournisseur.replaceAll("([a-z])([A-Z])", "$1 $2");
                 result.put("fournisseur", fournisseur);

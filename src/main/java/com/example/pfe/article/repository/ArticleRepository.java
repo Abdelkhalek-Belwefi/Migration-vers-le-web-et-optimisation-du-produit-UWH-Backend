@@ -42,4 +42,9 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     // La méthode deleteById est déjà fournie par JpaRepository
     // void deleteById(Long id);
+
+
+    // Ajouter cette méthode dans l’interface ArticleRepository
+    boolean existsByCategory(String category);
+
 }
