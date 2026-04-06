@@ -4,5 +4,6 @@ public enum Role {
     ADMINISTRATEUR,
     RESPONSABLE_ENTREPOT,
     OPERATEUR_ENTREPOT,
-    OPERATOR
+    OPERATOR,
+    SERVICE_COMMERCIAL          // ← ajout
 }

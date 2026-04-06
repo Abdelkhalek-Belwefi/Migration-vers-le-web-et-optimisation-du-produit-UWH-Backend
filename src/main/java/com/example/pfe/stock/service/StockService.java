@@ -134,6 +134,23 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
+    // ✅ Nouvelle méthode – décrémente le stock par articleId
+    @Transactional
+    public void decrementStock(Long articleId, int quantity) {
+        List<Stock> stocks = stockRepository.findByArticleId(articleId);
+        if (stocks.isEmpty()) {
+            throw new RuntimeException("Aucun stock trouvé pour l'article " + articleId);
+        }
+        // On prend le premier stock de l'article (à adapter selon la logique métier)
+        Stock stock = stocks.get(0);
+        if (stock.getQuantite() < quantity) {
+            throw new RuntimeException("Stock insuffisant pour l'article " + articleId);
+        }
+        stock.setQuantite(stock.getQuantite() - quantity);
+        stock.setUpdatedAt(LocalDateTime.now());
+        stockRepository.save(stock);
+    }
+
     // --- Conversion ---
     private StockDTO convertToDTO(Stock stock) {
         StockDTO dto = new StockDTO();
