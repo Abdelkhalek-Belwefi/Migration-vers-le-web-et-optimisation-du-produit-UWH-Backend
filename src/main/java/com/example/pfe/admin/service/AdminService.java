@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -79,12 +80,9 @@ public class AdminService {
     }
 
     public List<String> getAllRoles() {
-        return List.of(
-                Role.ADMINISTRATEUR.name(),
-                Role.RESPONSABLE_ENTREPOT.name(),
-                Role.OPERATEUR_ENTREPOT.name(),
-                Role.OPERATOR.name()
-        );
+        return Arrays.stream(Role.values())
+                .map(Enum::name)
+                .collect(Collectors.toList());
     }
 
     @Transactional

@@ -15,6 +15,7 @@ public class PutawayTaskDTO {
     private Long receptionId;
     private LocalDateTime createdAt;
 
+
     // --- Getters et Setters ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
