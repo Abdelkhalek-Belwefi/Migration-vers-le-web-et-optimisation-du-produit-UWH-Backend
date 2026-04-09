@@ -3,6 +3,9 @@ package com.example.pfe.expedition.controller;
 import com.example.pfe.expedition.dto.ExpeditionDTO;
 import com.example.pfe.expedition.entity.ExpeditionStatut;
 import com.example.pfe.expedition.service.ExpeditionService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -55,5 +58,15 @@ public class ExpeditionController {
     public ResponseEntity<Void> deleteExpedition(@PathVariable Long id) {
         expeditionService.deleteExpedition(id);
         return ResponseEntity.ok().build();
+    }
+
+    // ========== NOUVEL ENDPOINT POUR IMPRIMER LE BON DE LIVRAISON (HTML) ==========
+    @GetMapping("/{id}/print")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<String> printExpedition(@PathVariable Long id) {
+        String htmlContent = expeditionService.generateExpeditionPrintHtml(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.TEXT_HTML);
+        return new ResponseEntity<>(htmlContent, headers, HttpStatus.OK);
     }
 }
