@@ -3,6 +3,7 @@ package com.example.pfe.expedition.service;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.commande.entity.Commande;
+import com.example.pfe.commande.entity.LigneCommande;
 import com.example.pfe.commande.enums.StatutCommande;
 import com.example.pfe.commande.repository.CommandeRepository;
 import com.example.pfe.expedition.dto.ExpeditionDTO;
@@ -18,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
-import com.example.pfe.commande.entity.LigneCommande;
 
 @Service
 public class ExpeditionService {
@@ -74,7 +74,6 @@ public class ExpeditionService {
 
         Expedition saved = expeditionRepository.save(expedition);
 
-        // Mettre à jour le statut de la commande
         commande.setStatut(StatutCommande.EXPEDIEE);
         commande.setUpdatedAt(LocalDateTime.now());
         commandeRepository.save(commande);
@@ -91,7 +90,6 @@ public class ExpeditionService {
             expedition.setDateExpedition(LocalDateTime.now());
             expedition.setValidePar(getCurrentUser());
 
-            // Mettre à jour le statut de la commande associée
             Commande commande = expedition.getCommande();
             commande.setStatut(StatutCommande.EXPEDIEE);
             commande.setUpdatedAt(LocalDateTime.now());
@@ -137,21 +135,28 @@ public class ExpeditionService {
         return dto;
     }
 
-    // ========== NOUVELLE MÉTHODE POUR GÉNÉRER LE BON DE LIVRAISON (HTML) ==========
+    // ========== NOUVELLE MÉTHODE POUR RÉCUPÉRER LES EXPÉDITIONS DE L'UTILISATEUR CONNECTÉ ==========
+    public List<ExpeditionDTO> getExpeditionsByCurrentUser() {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("Utilisateur non connecté");
+        }
 
+        return expeditionRepository.findAll().stream()
+                .filter(exp -> exp.getPreparePar() != null && exp.getPreparePar().getId().equals(currentUser.getId()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    // ========== MÉTHODE POUR GÉNÉRER LE BON DE LIVRAISON (HTML) ==========
     public String generateExpeditionPrintHtml(Long expeditionId) {
         Expedition expedition = expeditionRepository.findById(expeditionId)
                 .orElseThrow(() -> new RuntimeException("Expédition non trouvée"));
         Commande commande = expedition.getCommande();
 
-        // Récupération du transporteur
         String transporteurNom = expedition.getTransporteur() != null ? expedition.getTransporteur() : "Non spécifié";
-
-        // Infos client
         String clientNom = commande.getClient().getNom() + " " + commande.getClient().getPrenom();
         String clientAdresse = commande.getClient().getAdresse() != null ? commande.getClient().getAdresse() : "";
-
-        // Génération du DataMatrix
         String barcodeBase64 = BarcodeUtil.generateDataMatrixBase64(expedition.getNumeroBL(), 200, 200);
 
         StringBuilder html = new StringBuilder();
@@ -179,29 +184,25 @@ public class ExpeditionService {
         html.append("<div class='separator'></div>");
 
         html.append("<table class='info-table'>");
-        html.append("<tr><td><strong>Transporteur :</strong></td><td>").append(transporteurNom).append("</td></tr>");
+        html.append("<tr><th>Transporteur :</th><td>").append(transporteurNom).append("</td></tr>");
         html.append("<tr><td colspan='2'>&nbsp;</td></tr>");
-        html.append(" hilab<td><strong>Client :</strong></td><td>").append(clientNom).append("</td></tr>");
-        html.append("<tr><td><strong>Adresse :</strong></td><td>").append(clientAdresse).append("</td></tr>");
+        html.append("<tr><th>Client :</th><td>").append(clientNom).append("</td></tr>");
+        html.append("<tr><th>Adresse :</th><td>").append(clientAdresse).append("</td></tr>");
         html.append("<tr><td colspan='2'>&nbsp;</td></tr>");
-        html.append("<tr><td><strong>N° Bon de commande :</strong></td><td>").append(commande.getNumeroCommande()).append("</td></tr>");
-        html.append("<tr><td><strong>N° Bon de livraison :</strong></td><td>").append(expedition.getNumeroBL()).append("</td></tr>");
-        html.append("<tr><td><strong>Date de livraison :</strong></td><td>").append(expedition.getDateExpedition() != null ? expedition.getDateExpedition().toLocalDate() : "").append("</td></tr>");
+        html.append("<tr><th>N° Bon de commande :</th><td>").append(commande.getNumeroCommande()).append("</td></tr>");
+        html.append("<tr><th>N° Bon de livraison :</th><td>").append(expedition.getNumeroBL()).append("</td></tr>");
+        html.append("<tr><th>Date de livraison :</th><td>").append(expedition.getDateExpedition() != null ? expedition.getDateExpedition().toLocalDate() : "").append("</td></tr>");
         html.append("</table>");
         html.append("<div class='separator'></div>");
 
-        // TABLEAU DES ARTICLES
         html.append("<table class='articles-table'>");
-        html.append("<thead>");
-        html.append("<tr><th>Référence</th><th>Désignation</th><th>Qté</th></tr>");
-        html.append("</thead><tbody>");
+        html.append("<thead><tr><th>Référence</th><th>Désignation</th><th>Qté</th></tr></thead><tbody>");
 
         for (LigneCommande ligne : commande.getLignes()) {
             String code = ligne.getArticleCode() != null ? ligne.getArticleCode() : "";
             String designation = "";
             int quantite = ligne.getQuantite() != null ? ligne.getQuantite() : 0;
 
-            // Récupération de la désignation depuis l'objet Article
             if (ligne.getArticle() != null && ligne.getArticle().getDesignation() != null) {
                 designation = ligne.getArticle().getDesignation();
             }
@@ -213,28 +214,32 @@ public class ExpeditionService {
             html.append("</tr>");
         }
 
-        html.append("</tbody>");
-        html.append("</table>");
+        html.append("</tbody></table>");
         html.append("<div class='separator'></div>");
 
-        // DataMatrix
         html.append("<div class='barcode'>");
         html.append("<img src='data:image/png;base64,").append(barcodeBase64).append("' alt='DataMatrix' />");
         html.append("<br/><small>").append(expedition.getNumeroBL()).append("</small>");
         html.append("</div>");
 
-        // Signature
         html.append("<div class='signature'>");
         html.append("<p>Cachet et signature du destinataire :</p>");
         html.append("<p style='margin-top: 30px;'>_________________________</p>");
         html.append("</div>");
 
-        // Bouton impression
         html.append("<div class='no-print' style='text-align:center; margin-top:20px;'>");
         html.append("<button onclick='window.print()' style='padding:10px 20px;'>🖨️ Imprimer</button>");
         html.append("</div>");
 
         html.append("</body></html>");
         return html.toString();
+    }
+    // Ajouter cette méthode dans ExpeditionService.java
+
+    public List<ExpeditionDTO> getAllExpeditionsForList() {
+        return expeditionRepository.findAll().stream()
+                .sorted((e1, e2) -> e2.getDateExpedition().compareTo(e1.getDateExpedition()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 }

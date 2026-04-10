@@ -69,4 +69,18 @@ public class ExpeditionController {
         headers.setContentType(MediaType.TEXT_HTML);
         return new ResponseEntity<>(htmlContent, headers, HttpStatus.OK);
     }
+
+    // ========== NOUVEL ENDPOINT POUR RÉCUPÉRER LES EXPÉDITIONS DE L'UTILISATEUR CONNECTÉ ==========
+    @GetMapping("/mes-expeditions")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR', 'OPERATEUR_ENTREPOT')")
+    public ResponseEntity<List<ExpeditionDTO>> getMesExpeditions() {
+        return ResponseEntity.ok(expeditionService.getExpeditionsByCurrentUser());
+    }
+    // Ajouter cette méthode dans ExpeditionController.java
+
+    @GetMapping("/liste")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ExpeditionDTO>> getListeExpeditions() {
+        return ResponseEntity.ok(expeditionService.getAllExpeditionsForList());
+    }
 }

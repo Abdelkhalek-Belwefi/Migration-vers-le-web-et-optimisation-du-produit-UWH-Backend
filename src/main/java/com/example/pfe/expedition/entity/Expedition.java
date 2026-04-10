@@ -30,7 +30,6 @@ public class Expedition {
     @JoinColumn(name = "prepare_par_id")
     private User preparePar;
 
-    // Champ ajouté pour le valideur
     @ManyToOne
     @JoinColumn(name = "valide_par_id")
     private User validePar;
@@ -46,13 +45,21 @@ public class Expedition {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ========== NOUVEAUX CHAMPS POUR STOCKER LE PDF ==========
+    @Lob
+    @Column(name = "pdf_document", columnDefinition = "LONGBLOB")
+    private byte[] pdfDocument;
+
+    @Column(name = "pdf_generated_at")
+    private LocalDateTime pdfGeneratedAt;
+
     public Expedition() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.statut = ExpeditionStatut.EN_PREPARATION;
     }
 
-    // Getters et setters
+    // Getters et setters existants
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -85,4 +92,11 @@ public class Expedition {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ========== NOUVEAUX GETTERS ET SETTERS ==========
+    public byte[] getPdfDocument() { return pdfDocument; }
+    public void setPdfDocument(byte[] pdfDocument) { this.pdfDocument = pdfDocument; }
+
+    public LocalDateTime getPdfGeneratedAt() { return pdfGeneratedAt; }
+    public void setPdfGeneratedAt(LocalDateTime pdfGeneratedAt) { this.pdfGeneratedAt = pdfGeneratedAt; }
 }
