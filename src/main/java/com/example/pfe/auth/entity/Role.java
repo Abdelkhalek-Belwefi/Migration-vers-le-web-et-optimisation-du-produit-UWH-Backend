@@ -4,5 +4,6 @@ public enum Role {
     RESPONSABLE_ENTREPOT,
     OPERATEUR_ENTREPOT,
     OPERATOR,
-    SERVICE_COMMERCIAL   // ← doit être présent
+    SERVICE_COMMERCIAL,   // ← doit être présent
+    TRANSPORTEUR   // ← NOUVEAU
 }

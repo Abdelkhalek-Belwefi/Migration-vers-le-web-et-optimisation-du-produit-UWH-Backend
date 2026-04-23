@@ -2,6 +2,7 @@ package com.example.pfe.expedition.service;
 
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.auth.entity.Role;
 import com.example.pfe.commande.entity.Commande;
 import com.example.pfe.commande.entity.LigneCommande;
 import com.example.pfe.commande.enums.StatutCommande;
@@ -11,6 +12,11 @@ import com.example.pfe.expedition.entity.Expedition;
 import com.example.pfe.expedition.entity.ExpeditionStatut;
 import com.example.pfe.expedition.repository.ExpeditionRepository;
 import com.example.pfe.expedition.util.BarcodeUtil;
+import com.example.pfe.livraison.entity.Livraison;
+import com.example.pfe.livraison.entity.LivraisonStatut;
+import com.example.pfe.livraison.repository.LivraisonRepository;
+import com.example.pfe.service.EmailService;                    // ← AJOUT
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -27,6 +33,12 @@ public class ExpeditionService {
     private final CommandeRepository commandeRepository;
     private final UserRepository userRepository;
 
+    @Autowired
+    private LivraisonRepository livraisonRepository;
+
+    @Autowired
+    private EmailService emailService;                        // ← AJOUT
+
     public ExpeditionService(ExpeditionRepository expeditionRepository,
                              CommandeRepository commandeRepository,
                              UserRepository userRepository) {
@@ -34,6 +46,8 @@ public class ExpeditionService {
         this.commandeRepository = commandeRepository;
         this.userRepository = userRepository;
     }
+
+    // ========== MÉTHODES EXISTANTES (inchangées) ==========
 
     public List<ExpeditionDTO> getAllExpeditions() {
         return expeditionRepository.findAll().stream()
@@ -234,12 +248,88 @@ public class ExpeditionService {
         html.append("</body></html>");
         return html.toString();
     }
-    // Ajouter cette méthode dans ExpeditionService.java
 
     public List<ExpeditionDTO> getAllExpeditionsForList() {
         return expeditionRepository.findAll().stream()
                 .sorted((e1, e2) -> e2.getDateExpedition().compareTo(e1.getDateExpedition()))
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    // ========== MÉTHODE UTILITAIRE (déjà existante, non modifiée) ==========
+    @Transactional
+    public ExpeditionDTO assignerTransporteur(Long expeditionId, Long transporteurId) {
+        Expedition expedition = expeditionRepository.findById(expeditionId)
+                .orElseThrow(() -> new RuntimeException("Expédition non trouvée"));
+        expedition.setTransporteur(transporteurId.toString());
+        expedition.setUpdatedAt(LocalDateTime.now());
+        return convertToDTO(expeditionRepository.save(expedition));
+    }
+
+    // ========== NOUVELLE MÉTHODE AVEC ID TRANSPORTEUR (crée une Livraison) ==========
+    @Transactional
+    public ExpeditionDTO expedierCommandeWithTransporteurId(Long commandeId, Long transporteurId) {
+        Commande commande = commandeRepository.findById(commandeId)
+                .orElseThrow(() -> new RuntimeException("Commande non trouvée"));
+        if (commande.getStatut() != StatutCommande.VALIDEE) {
+            throw new RuntimeException("Seules les commandes validées peuvent être expédiées");
+        }
+        if (expeditionRepository.findByCommandeId(commandeId).isPresent()) {
+            throw new RuntimeException("Une expédition existe déjà pour cette commande");
+        }
+
+        User transporteur = userRepository.findById(transporteurId)
+                .orElseThrow(() -> new RuntimeException("Transporteur non trouvé"));
+        if (transporteur.getRole() != Role.TRANSPORTEUR) {
+            throw new RuntimeException("L'utilisateur n'a pas le rôle TRANSPORTEUR");
+        }
+
+        // Création de l'expédition
+        Expedition expedition = new Expedition();
+        expedition.setCommande(commande);
+        expedition.setNumeroBL(generateNumeroBL());
+        expedition.setTransporteur(transporteur.getNom() + " " + transporteur.getPrenom());
+        expedition.setStatut(ExpeditionStatut.EXPEDIEE);
+        expedition.setDateExpedition(LocalDateTime.now());
+        expedition.setPreparePar(getCurrentUser());
+
+        Expedition saved = expeditionRepository.save(expedition);
+
+        // Mise à jour commande
+        commande.setStatut(StatutCommande.EXPEDIEE);
+        commande.setUpdatedAt(LocalDateTime.now());
+        commandeRepository.save(commande);
+
+        // Création de la livraison associée
+        Livraison livraison = new Livraison();
+        livraison.setExpedition(saved);
+        livraison.setTransporteur(transporteur);
+        livraison.setCodeOtp(generateOtp());
+        livraison.setStatut(LivraisonStatut.ASSIGNEE);
+        livraison.setDateAssignation(LocalDateTime.now());
+        livraisonRepository.save(livraison);
+
+        // ========== ENVOI DE L'OTP PAR EMAIL ==========
+        try {
+            String clientEmail = commande.getClient().getEmail();
+            if (clientEmail != null && !clientEmail.isEmpty()) {
+                emailService.sendOtpEmail(clientEmail, livraison.getCodeOtp(), saved.getNumeroBL());
+                System.out.println("OTP envoyé à " + clientEmail);
+            } else {
+                System.out.println("Le client n'a pas d'adresse email : " + commande.getClient().getNom());
+            }
+        } catch (Exception e) {
+            System.err.println("Erreur lors de l'envoi de l'email : " + e.getMessage());
+            // L'expédition reste valide même si l'email échoue
+        }
+
+        return convertToDTO(saved);
+    }
+
+    // Méthode utilitaire pour générer un OTP à 6 chiffres
+    private String generateOtp() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        int otp = 100000 + random.nextInt(900000);
+        return String.valueOf(otp);
     }
 }

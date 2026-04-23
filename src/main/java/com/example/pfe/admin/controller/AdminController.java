@@ -3,7 +3,10 @@ package com.example.pfe.admin.controller;
 import com.example.pfe.admin.dto.UserDTO;
 import com.example.pfe.admin.dto.RoleUpdateRequest;
 import com.example.pfe.admin.service.AdminService;
+import com.example.pfe.livraison.dto.LivraisonDTO;
+import com.example.pfe.livraison.service.LivraisonService;   // ← AJOUT (correction)
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,10 +17,15 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final LivraisonService livraisonService;          // ← AJOUT (correction)
 
-    public AdminController(AdminService adminService) {
+    // Constructeur modifié pour inclure LivraisonService (ajout, pas de suppression)
+    public AdminController(AdminService adminService, LivraisonService livraisonService) {
         this.adminService = adminService;
+        this.livraisonService = livraisonService;            // ← AJOUT
     }
+
+    // ⬇️ TOUTES LES MÉTHODES EXISTANTES RESTENT IDENTIQUES ⬇️
 
     @GetMapping("/users")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
@@ -60,5 +68,14 @@ public class AdminController {
     @PostMapping("/users")
     public ResponseEntity<UserDTO> createUser(@RequestBody UserDTO userDTO) {
         return ResponseEntity.ok(adminService.createUser(userDTO));
+    }
+
+    // ========== NOUVELLE MÉTHODE POUR ASSIGNER UN TRANSPORTEUR ==========
+    @PostMapping("/expeditions/{expeditionId}/assigner-transporteur")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT')")
+    public ResponseEntity<LivraisonDTO> assignerTransporteur(
+            @PathVariable Long expeditionId,
+            @RequestParam Long transporteurId) {
+        return ResponseEntity.ok(livraisonService.assignerTransporteur(expeditionId, transporteurId));
     }
 }

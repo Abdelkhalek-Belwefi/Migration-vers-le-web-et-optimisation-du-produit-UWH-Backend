@@ -157,6 +157,12 @@
 			<artifactId>html2pdf</artifactId>
 			<version>4.0.5</version>
 		</dependency>
+
+		<!-- JavaMail pour l'envoi d'emails -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

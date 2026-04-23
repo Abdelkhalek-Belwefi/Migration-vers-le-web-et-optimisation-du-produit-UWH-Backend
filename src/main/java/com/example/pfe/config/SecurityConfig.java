@@ -100,7 +100,8 @@ public class SecurityConfig {
 
                         // ===== EXPÉDITIONS =====
                         .requestMatchers("/api/expeditions/**").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
-
+                        // ===== ROUTES TRANSPORTEUR =====
+                        .requestMatchers("/api/transporteur/**").hasAuthority("TRANSPORTEUR")
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
