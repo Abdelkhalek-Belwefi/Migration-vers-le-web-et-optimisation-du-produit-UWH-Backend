@@ -42,6 +42,7 @@ public class SecurityConfig {
 
                         // ===== ROUTES ADMIN =====
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
+                        .requestMatchers("/api/admin/warehouses/**").hasAuthority("ADMINISTRATEUR")
 
                         // ===== ARTICLES =====
                         .requestMatchers(HttpMethod.GET, "/api/articles/**").hasAnyAuthority(
