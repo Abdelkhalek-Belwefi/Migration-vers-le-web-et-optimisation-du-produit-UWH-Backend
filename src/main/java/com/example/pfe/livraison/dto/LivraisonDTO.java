@@ -14,8 +14,10 @@ public class LivraisonDTO {
     private LivraisonStatut statut;
     private LocalDateTime dateAssignation;
     private LocalDateTime dateLivraison;
+    private Double clientLatitude;   // ← NOUVEAU
+    private Double clientLongitude;  // ← NOUVEAU
 
-    // getters et setters
+    // Getters et setters existants (inchangés)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -45,4 +47,11 @@ public class LivraisonDTO {
 
     public LocalDateTime getDateLivraison() { return dateLivraison; }
     public void setDateLivraison(LocalDateTime dateLivraison) { this.dateLivraison = dateLivraison; }
+
+    // Nouveaux getters et setters
+    public Double getClientLatitude() { return clientLatitude; }
+    public void setClientLatitude(Double clientLatitude) { this.clientLatitude = clientLatitude; }
+
+    public Double getClientLongitude() { return clientLongitude; }
+    public void setClientLongitude(Double clientLongitude) { this.clientLongitude = clientLongitude; }
 }

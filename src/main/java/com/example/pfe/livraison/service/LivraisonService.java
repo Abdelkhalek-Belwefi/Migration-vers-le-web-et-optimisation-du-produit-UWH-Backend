@@ -168,6 +168,13 @@ public class LivraisonService {
         dto.setStatut(livraison.getStatut());
         dto.setDateAssignation(livraison.getDateAssignation());
         dto.setDateLivraison(livraison.getDateLivraison());
+
+        // Ajout des coordonnées GPS du client
+        if (livraison.getExpedition().getCommande().getClient() != null) {
+            dto.setClientLatitude(livraison.getExpedition().getCommande().getClient().getLatitude());
+            dto.setClientLongitude(livraison.getExpedition().getCommande().getClient().getLongitude());
+        }
+
         return dto;
     }
 }

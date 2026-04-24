@@ -162,7 +162,7 @@ public class ExpeditionService {
                 .collect(Collectors.toList());
     }
 
-    // ========== MÉTHODE POUR GÉNÉRER LE BON DE LIVRAISON (HTML) ==========
+    // ========== MÉTHODE POUR GÉNÉRER LE BON DE LIVRAISON (HTML) – MODIFIÉE ==========
     public String generateExpeditionPrintHtml(Long expeditionId) {
         Expedition expedition = expeditionRepository.findById(expeditionId)
                 .orElseThrow(() -> new RuntimeException("Expédition non trouvée"));
@@ -171,7 +171,10 @@ public class ExpeditionService {
         String transporteurNom = expedition.getTransporteur() != null ? expedition.getTransporteur() : "Non spécifié";
         String clientNom = commande.getClient().getNom() + " " + commande.getClient().getPrenom();
         String clientAdresse = commande.getClient().getAdresse() != null ? commande.getClient().getAdresse() : "";
-        String barcodeBase64 = BarcodeUtil.generateDataMatrixBase64(expedition.getNumeroBL(), 200, 200);
+
+        // Génération des deux codes-barres principaux (BL et Commande)
+        String barcodeBL = BarcodeUtil.generateDataMatrixBase64(expedition.getNumeroBL(), 200, 200);
+        String barcodeCommande = BarcodeUtil.generateDataMatrixBase64(commande.getNumeroCommande(), 200, 200);
 
         StringBuilder html = new StringBuilder();
         html.append("<!DOCTYPE html><html><head>");
@@ -188,7 +191,8 @@ public class ExpeditionService {
         html.append(".articles-table th, .articles-table td { border: 1px solid #000; padding: 8px; text-align: left; }");
         html.append(".articles-table th { background-color: #f2f2f2; }");
         html.append(".articles-table td:last-child { text-align: center; }");
-        html.append(".barcode { text-align: center; margin-top: 30px; }");
+        html.append(".barcode { display: flex; justify-content: center; gap: 40px; margin-top: 30px; }");
+        html.append(".barcode-item { text-align: center; }");
         html.append(".signature { margin-top: 40px; text-align: right; }");
         html.append("@media print { body { margin: 0; } .no-print { display: none; } }");
         html.append("</style>");
@@ -209,8 +213,9 @@ public class ExpeditionService {
         html.append("</table>");
         html.append("<div class='separator'></div>");
 
+        // Tableau des articles avec colonne code-barres (basé sur GTIN)
         html.append("<table class='articles-table'>");
-        html.append("<thead><tr><th>Référence</th><th>Désignation</th><th>Qté</th></tr></thead><tbody>");
+        html.append("<thead><tr><th>Référence</th><th>Désignation</th><th>Qté</th><th>Code-barre</th></tr></thead><tbody>");
 
         for (LigneCommande ligne : commande.getLignes()) {
             String code = ligne.getArticleCode() != null ? ligne.getArticleCode() : "";
@@ -221,19 +226,46 @@ public class ExpeditionService {
                 designation = ligne.getArticle().getDesignation();
             }
 
+            // Récupération du GTIN (fallback sur le code article si absent)
+            String gtin = "";
+            if (ligne.getArticle() != null && ligne.getArticle().getGtin() != null && !ligne.getArticle().getGtin().isBlank()) {
+                gtin = ligne.getArticle().getGtin();
+            } else if (!code.isEmpty()) {
+                gtin = code; // fallback
+            }
+
+            String barcodeArticle = "";
+            if (!gtin.isEmpty()) {
+                barcodeArticle = BarcodeUtil.generateDataMatrixBase64(gtin, 100, 100);
+            }
+
             html.append("<tr>");
             html.append("<td>").append(code).append("</td>");
             html.append("<td>").append(designation).append("</td>");
             html.append("<td>").append(quantite).append("</td>");
+            html.append("<td>");
+            if (!barcodeArticle.isEmpty()) {
+                html.append("<img src='data:image/png;base64,").append(barcodeArticle).append("' width='70' alt='Code-barres article'/>");
+            } else {
+                html.append("-");
+            }
+            html.append("</td>");
             html.append("</tr>");
         }
 
         html.append("</tbody></table>");
         html.append("<div class='separator'></div>");
 
+        // Section codes-barres principaux (BL + Commande) côte à côte
         html.append("<div class='barcode'>");
-        html.append("<img src='data:image/png;base64,").append(barcodeBase64).append("' alt='DataMatrix' />");
-        html.append("<br/><small>").append(expedition.getNumeroBL()).append("</small>");
+        html.append("<div class='barcode-item'>");
+        html.append("<img src='data:image/png;base64,").append(barcodeBL).append("' alt='Code-barres BL' />");
+        html.append("<br/><small>BL : ").append(expedition.getNumeroBL()).append("</small>");
+        html.append("</div>");
+        html.append("<div class='barcode-item'>");
+        html.append("<img src='data:image/png;base64,").append(barcodeCommande).append("' alt='Code-barres Commande' />");
+        html.append("<br/><small>Commande : ").append(commande.getNumeroCommande()).append("</small>");
+        html.append("</div>");
         html.append("</div>");
 
         html.append("<div class='signature'>");
