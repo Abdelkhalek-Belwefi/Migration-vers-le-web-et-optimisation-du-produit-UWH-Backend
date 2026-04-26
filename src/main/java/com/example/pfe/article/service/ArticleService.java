@@ -3,6 +3,13 @@ package com.example.pfe.article.service;
 import com.example.pfe.article.dto.ArticleDTO;
 import com.example.pfe.article.entity.Article;
 import com.example.pfe.article.repository.ArticleRepository;
+import com.example.pfe.auth.entity.Role;
+import com.example.pfe.auth.entity.User;
+import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.entrepot.entity.Warehouse;
+import com.example.pfe.entrepot.repository.WarehouseRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,10 +20,18 @@ import java.util.stream.Collectors;
 public class ArticleService {
 
     private final ArticleRepository articleRepository;
+    private final UserRepository userRepository;
+    private final WarehouseRepository warehouseRepository;
 
-    public ArticleService(ArticleRepository articleRepository) {
+    public ArticleService(ArticleRepository articleRepository,
+                          UserRepository userRepository,
+                          WarehouseRepository warehouseRepository) {
         this.articleRepository = articleRepository;
+        this.userRepository = userRepository;
+        this.warehouseRepository = warehouseRepository;
     }
+
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     public List<ArticleDTO> getAllArticles() {
         return articleRepository.findAll().stream()
@@ -42,8 +57,30 @@ public class ArticleService {
         return new ArticleDTO(article);
     }
 
+    // ========== MÉTHODE CREATE ARTICLE CORRIGÉE ==========
+
     @Transactional
     public ArticleDTO createArticle(ArticleDTO dto) {
+        // Récupérer l'utilisateur connecté
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("Utilisateur non connecté");
+        }
+
+        // Déterminer l'entrepôt
+        Warehouse entrepot;
+        if (currentUser.getRole() == Role.ADMINISTRATEUR) {
+            // Admin : utiliser l'entrepôt central (id=1)
+            entrepot = warehouseRepository.findById(1L)
+                    .orElseThrow(() -> new RuntimeException("Entrepôt central non trouvé"));
+            System.out.println("✅ Admin : création d'article dans l'entrepôt central (id=1)");
+        } else if (currentUser.getEntrepot() != null) {
+            // Utilisateur avec entrepôt assigné
+            entrepot = currentUser.getEntrepot();
+        } else {
+            throw new RuntimeException("Impossible de créer un article : utilisateur non lié à un entrepôt");
+        }
+
         Article article = new Article();
         article.setCodeArticleERP(dto.getCodeArticleERP());
         article.setGtin(dto.getGtin());
@@ -58,7 +95,8 @@ public class ArticleService {
         article.setDureeExpirationJours(dto.getDureeExpirationJours());
         article.setActif(dto.isActif());
         article.setPrixUnitaire(dto.getPrixUnitaire());
-        // le champ `code` sera rempli par @PrePersist
+        article.setEntrepot(entrepot);
+
         Article saved = articleRepository.save(article);
         return new ArticleDTO(saved);
     }
@@ -107,5 +145,20 @@ public class ArticleService {
         article.setActif(false);
         article.setUpdatedAt(java.time.LocalDateTime.now());
         return new ArticleDTO(articleRepository.save(article));
+    }
+
+    // ========== MÉTHODE UTILITAIRE ==========
+
+    private User getCurrentUser() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof UserDetails) {
+                String email = ((UserDetails) principal).getUsername();
+                return userRepository.findByEmail(email).orElse(null);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération utilisateur: " + e.getMessage());
+        }
+        return null;
     }
 }

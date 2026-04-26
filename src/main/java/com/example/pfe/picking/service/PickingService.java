@@ -1,6 +1,8 @@
 package com.example.pfe.picking.service;
 
 import com.example.pfe.article.repository.ArticleRepository;
+import com.example.pfe.auth.entity.User;
+import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.commande.entity.Commande;
 import com.example.pfe.commande.entity.LigneCommande;
 import com.example.pfe.commande.repository.CommandeRepository;
@@ -9,6 +11,8 @@ import com.example.pfe.picking.dto.PickingTaskDTO;
 import com.example.pfe.picking.entity.PickingTask;
 import com.example.pfe.picking.enums.StatutPicking;
 import com.example.pfe.picking.repository.PickingTaskRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,16 +27,21 @@ public class PickingService {
     private final CommandeRepository commandeRepository;
     private final LigneCommandeRepository ligneCommandeRepository;
     private final ArticleRepository articleRepository;
+    private final UserRepository userRepository;
 
     public PickingService(PickingTaskRepository pickingTaskRepository,
                           CommandeRepository commandeRepository,
                           LigneCommandeRepository ligneCommandeRepository,
-                          ArticleRepository articleRepository) {
+                          ArticleRepository articleRepository,
+                          UserRepository userRepository) {
         this.pickingTaskRepository = pickingTaskRepository;
         this.commandeRepository = commandeRepository;
         this.ligneCommandeRepository = ligneCommandeRepository;
         this.articleRepository = articleRepository;
+        this.userRepository = userRepository;
     }
+
+    // ========== MÉTHODE GENERATE PICKING TASKS CORRIGÉE ==========
 
     @Transactional
     public void generatePickingTasks(Long commandeId) {
@@ -47,21 +56,10 @@ public class PickingService {
                 task.setQuantiteCommandee(ligne.getQuantite());
                 task.setQuantitePicked(0);
                 task.setStatut(StatutPicking.A_PREPARER);
+                task.setEntrepot(commande.getEntrepot());  // ← AJOUT
                 pickingTaskRepository.save(task);
             }
         }
-    }
-
-    public List<PickingTaskDTO> getTasksForOperator(String operatorId) {
-        return pickingTaskRepository.findByAssignedToAndStatut(operatorId, StatutPicking.A_PREPARER).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    public List<PickingTaskDTO> getUnassignedTasks() {
-        return pickingTaskRepository.findByStatut(StatutPicking.A_PREPARER).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -90,6 +88,59 @@ public class PickingService {
         task.setUpdatedAt(LocalDateTime.now());
         return convertToDTO(pickingTaskRepository.save(task));
     }
+
+    // ========== MÉTHODES DE FILTRAGE ==========
+
+    public List<PickingTaskDTO> getTasksForOperator(String operatorId) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PickingTask> tasks;
+        if (entrepotId != null) {
+            tasks = pickingTaskRepository.findByAssignedToAndStatutAndEntrepotId(operatorId, StatutPicking.A_PREPARER, entrepotId);
+        } else {
+            tasks = pickingTaskRepository.findByAssignedToAndStatut(operatorId, StatutPicking.A_PREPARER);
+        }
+        return tasks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<PickingTaskDTO> getUnassignedTasks() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PickingTask> tasks;
+        if (entrepotId != null) {
+            tasks = pickingTaskRepository.findByStatutAndEntrepotId(StatutPicking.A_PREPARER, entrepotId);
+        } else {
+            tasks = pickingTaskRepository.findByStatut(StatutPicking.A_PREPARER);
+        }
+        return tasks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    // ========== MÉTHODES UTILITAIRES ==========
+
+    private User getCurrentUser() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof UserDetails) {
+                String email = ((UserDetails) principal).getUsername();
+                return userRepository.findByEmail(email).orElse(null);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    // ========== CONVERSION ==========
 
     private PickingTaskDTO convertToDTO(PickingTask task) {
         PickingTaskDTO dto = new PickingTaskDTO();

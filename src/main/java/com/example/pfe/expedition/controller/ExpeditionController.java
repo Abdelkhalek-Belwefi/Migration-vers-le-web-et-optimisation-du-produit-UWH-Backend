@@ -22,29 +22,19 @@ import java.util.stream.Collectors;
 public class ExpeditionController {
 
     private final ExpeditionService expeditionService;
-    private final UserRepository userRepository;   // ← AJOUT
+    private final UserRepository userRepository;
 
     public ExpeditionController(ExpeditionService expeditionService, UserRepository userRepository) {
         this.expeditionService = expeditionService;
-        this.userRepository = userRepository;      // ← AJOUT
+        this.userRepository = userRepository;
     }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ExpeditionDTO>> getAllExpeditions() {
-        return ResponseEntity.ok(expeditionService.getAllExpeditions());
-    }
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<ExpeditionDTO> getExpeditionById(@PathVariable Long id) {
         return ResponseEntity.ok(expeditionService.getExpeditionById(id));
-    }
-
-    @GetMapping("/statut/{statut}")
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ExpeditionDTO>> getExpeditionsByStatut(@PathVariable ExpeditionStatut statut) {
-        return ResponseEntity.ok(expeditionService.getExpeditionsByStatut(statut));
     }
 
     @PostMapping("/expedier")
@@ -75,19 +65,6 @@ public class ExpeditionController {
         return new ResponseEntity<>(htmlContent, headers, HttpStatus.OK);
     }
 
-    @GetMapping("/mes-expeditions")
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR', 'OPERATEUR_ENTREPOT')")
-    public ResponseEntity<List<ExpeditionDTO>> getMesExpeditions() {
-        return ResponseEntity.ok(expeditionService.getExpeditionsByCurrentUser());
-    }
-
-    @GetMapping("/liste")
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ExpeditionDTO>> getListeExpeditions() {
-        return ResponseEntity.ok(expeditionService.getAllExpeditionsForList());
-    }
-
-    // ========== NOUVEAU : Récupérer la liste des transporteurs ==========
     @GetMapping("/transporteurs")
     @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<List<TransporteurDTO>> getTransporteurs() {
@@ -96,6 +73,52 @@ public class ExpeditionController {
                 .map(u -> new TransporteurDTO(u.getId(), u.getPrenom(), u.getNom()))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
+    }
+
+    @PostMapping("/expedier-avec-id")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<ExpeditionDTO> expedierCommandeAvecId(
+            @RequestParam Long commandeId,
+            @RequestParam Long transporteurId) {
+        return ResponseEntity.ok(expeditionService.expedierCommandeWithTransporteurId(commandeId, transporteurId));
+    }
+
+    // ========== MÉTHODES MODIFIÉES (FILTRAGE PAR ENTREPÔT) ==========
+
+    /**
+     * Récupère toutes les expéditions (filtrées par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ExpeditionDTO>> getAllExpeditions() {
+        return ResponseEntity.ok(expeditionService.getAllExpeditionsFiltered());
+    }
+
+    /**
+     * Récupère les expéditions par statut (filtrées par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping("/statut/{statut}")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ExpeditionDTO>> getExpeditionsByStatut(@PathVariable ExpeditionStatut statut) {
+        return ResponseEntity.ok(expeditionService.getExpeditionsByStatutFiltered(statut));
+    }
+
+    /**
+     * Récupère les expéditions de l'utilisateur connecté (filtrées par entrepôt)
+     */
+    @GetMapping("/mes-expeditions")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR', 'OPERATEUR_ENTREPOT')")
+    public ResponseEntity<List<ExpeditionDTO>> getMesExpeditions() {
+        return ResponseEntity.ok(expeditionService.getExpeditionsByCurrentUserFiltered());
+    }
+
+    /**
+     * Récupère toutes les expéditions pour la liste (filtrées par entrepôt)
+     */
+    @GetMapping("/liste")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ExpeditionDTO>> getListeExpeditions() {
+        return ResponseEntity.ok(expeditionService.getAllExpeditionsForListFiltered());
     }
 
     // DTO interne
@@ -113,15 +136,5 @@ public class ExpeditionController {
         public Long getId() { return id; }
         public String getPrenom() { return prenom; }
         public String getNom() { return nom; }
-    }
-    // ajout ce methode
-// Dans ExpeditionController.java, ajouter cette méthode après les autres
-
-    @PostMapping("/expedier-avec-id")
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<ExpeditionDTO> expedierCommandeAvecId(
-            @RequestParam Long commandeId,
-            @RequestParam Long transporteurId) {
-        return ResponseEntity.ok(expeditionService.expedierCommandeWithTransporteurId(commandeId, transporteurId));
     }
 }

@@ -1,8 +1,12 @@
 package com.example.pfe.rangement.service;
 
+import com.example.pfe.auth.entity.User;
+import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.reception.dto.PutawayTaskDTO;
 import com.example.pfe.reception.entity.PutawayTask;
 import com.example.pfe.reception.repository.PutawayTaskRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,10 +18,15 @@ import java.util.stream.Collectors;
 public class RangementService {
 
     private final PutawayTaskRepository taskRepository;
+    private final UserRepository userRepository;  // ← NOUVEAU
 
-    public RangementService(PutawayTaskRepository taskRepository) {
+    public RangementService(PutawayTaskRepository taskRepository,
+                            UserRepository userRepository) {  // ← NOUVEAU
         this.taskRepository = taskRepository;
+        this.userRepository = userRepository;
     }
+
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     public List<PutawayTaskDTO> getAllTasks() {
         return taskRepository.findAll().stream()
@@ -66,7 +75,6 @@ public class RangementService {
         PutawayTaskDTO dto = new PutawayTaskDTO();
         dto.setId(task.getId());
         dto.setArticleId(task.getArticle().getId());
-        // dto.setArticleCode(task.getArticle().getCode()); // supprimé car champ absent
         dto.setArticleDesignation(task.getArticle().getDesignation());
         dto.setLot(task.getLot());
         dto.setQuantite(task.getQuantite());
@@ -75,7 +83,85 @@ public class RangementService {
         dto.setStatut(task.getStatut());
         dto.setReceptionId(task.getReception() != null ? task.getReception().getId() : null);
         dto.setCreatedAt(task.getCreatedAt());
-        // dto.setCompletedAt(task.getCompletedAt()); // champ absent du DTO
         return dto;
+    }
+
+    // ========== NOUVELLES MÉTHODES POUR LE FILTRAGE PAR ENTREPÔT ==========
+
+    /**
+     * Récupère l'utilisateur connecté
+     */
+    private User getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof UserDetails) {
+            String email = ((UserDetails) principal).getUsername();
+            return userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé avec l'email: " + email));
+        }
+        return null;
+    }
+
+    /**
+     * Récupère l'ID de l'entrepôt de l'utilisateur connecté
+     */
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Récupère toutes les tâches (filtrées par entrepôt)
+     */
+    public List<PutawayTaskDTO> getAllTasksFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PutawayTask> tasks;
+        if (entrepotId != null) {
+            tasks = taskRepository.findByEntrepotId(entrepotId);
+        } else {
+            tasks = taskRepository.findAll();
+        }
+        return tasks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    /**
+     * Récupère les tâches par statut (filtrées par entrepôt)
+     */
+    public List<PutawayTaskDTO> getTasksByStatutFiltered(String statut) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PutawayTask> tasks;
+        if (entrepotId != null) {
+            tasks = taskRepository.findByStatutAndEntrepotId(statut, entrepotId);
+        } else {
+            tasks = taskRepository.findByStatut(statut);
+        }
+        return tasks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    /**
+     * Récupère les tâches à faire (filtrées par entrepôt)
+     */
+    public List<PutawayTaskDTO> getTasksAFaireFiltered() {
+        return getTasksByStatutFiltered("A_FAIRE");
+    }
+
+    /**
+     * Récupère les tâches d'une réception (filtrées par entrepôt)
+     */
+    public List<PutawayTaskDTO> getTasksByReceptionFiltered(Long receptionId) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PutawayTask> tasks;
+        if (entrepotId != null) {
+            tasks = taskRepository.findByReceptionIdAndEntrepotId(receptionId, entrepotId);
+        } else {
+            tasks = taskRepository.findByReceptionId(receptionId);
+        }
+        return tasks.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 }

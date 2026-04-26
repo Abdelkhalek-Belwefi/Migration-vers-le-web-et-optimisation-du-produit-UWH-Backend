@@ -35,4 +35,57 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     @Query("SELECT SUM(s.quantite) FROM Stock s WHERE s.article.id = :articleId")
     Integer getTotalQuantiteByArticle(@Param("articleId") Long articleId);
+
+    // ========== NOUVELLES MÉTHODES POUR LE FILTRAGE PAR ENTREPÔT ==========
+
+    /**
+     * Récupère tous les stocks d'un entrepôt spécifique
+     */
+    List<Stock> findByEntrepotId(Long entrepotId);
+
+    /**
+     * Récupère les stocks d'un article dans un entrepôt spécifique
+     */
+    List<Stock> findByArticleIdAndEntrepotId(Long articleId, Long entrepotId);
+
+    /**
+     * Récupère les stocks d'un lot dans un entrepôt spécifique
+     */
+    List<Stock> findByLotAndEntrepotId(String lot, Long entrepotId);
+
+    /**
+     * Récupère les stocks par emplacement dans un entrepôt spécifique
+     */
+    List<Stock> findByEmplacementContainingIgnoreCaseAndEntrepotId(String emplacement, Long entrepotId);
+
+    /**
+     * Récupère les stocks par statut dans un entrepôt spécifique
+     */
+    List<Stock> findByStatutAndEntrepotId(StockStatut statut, Long entrepotId);
+
+    /**
+     * Recherche avancée avec filtre par entrepôt
+     */
+    @Query("SELECT s FROM Stock s WHERE " +
+            "(:entrepotId IS NULL OR s.entrepot.id = :entrepotId) AND " +
+            "(:articleId IS NULL OR s.article.id = :articleId) AND " +
+            "(:lot IS NULL OR s.lot LIKE %:lot%) AND " +
+            "(:emplacement IS NULL OR s.emplacement LIKE %:emplacement%) AND " +
+            "(:statut IS NULL OR s.statut = :statut)")
+    List<Stock> searchStocksWithEntrepot(@Param("entrepotId") Long entrepotId,
+                                         @Param("articleId") Long articleId,
+                                         @Param("lot") String lot,
+                                         @Param("emplacement") String emplacement,
+                                         @Param("statut") StockStatut statut);
+
+    /**
+     * Vérifie si un lot existe dans un entrepôt spécifique
+     */
+    boolean existsByLotAndEntrepotId(String lot, Long entrepotId);
+
+    /**
+     * Quantité totale d'un article dans un entrepôt spécifique
+     */
+    @Query("SELECT SUM(s.quantite) FROM Stock s WHERE s.article.id = :articleId AND s.entrepot.id = :entrepotId")
+    Integer getTotalQuantiteByArticleAndEntrepot(@Param("articleId") Long articleId, @Param("entrepotId") Long entrepotId);
 }

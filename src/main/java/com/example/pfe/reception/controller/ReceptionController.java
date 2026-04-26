@@ -23,6 +23,8 @@ public class ReceptionController {
         this.receptionService = receptionService;
     }
 
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
+
     @PostMapping
     @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<ReceptionDTO> createReception(@RequestBody ReceptionDTO receptionDTO) {
@@ -30,12 +32,6 @@ public class ReceptionController {
         System.out.println("Numéro PO: " + receptionDTO.getNumeroPO());
         System.out.println("Nombre de lignes: " + (receptionDTO.getLignes() != null ? receptionDTO.getLignes().size() : 0));
         return ResponseEntity.ok(receptionService.createReception(receptionDTO));
-    }
-
-    @GetMapping
-    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ReceptionDTO>> getAllReceptions() {
-        return ResponseEntity.ok(receptionService.getAllReceptions());
     }
 
     @GetMapping("/{id}")
@@ -48,15 +44,6 @@ public class ReceptionController {
     @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<ReceptionDTO> getReceptionByPO(@PathVariable String numeroPO) {
         return ResponseEntity.ok(receptionService.getReceptionByPO(numeroPO));
-    }
-
-    @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<ReceptionDTO>> searchReceptions(
-            @RequestParam(required = false) String numeroPO,
-            @RequestParam(required = false) String fournisseur,
-            @RequestParam(required = false) ReceptionStatut statut) {
-        return ResponseEntity.ok(receptionService.searchReceptions(numeroPO, fournisseur, statut));
     }
 
     @PostMapping("/{receptionId}/lines")
@@ -91,13 +78,40 @@ public class ReceptionController {
         return ResponseEntity.ok(receptionService.getPutawayTasksByReception(receptionId));
     }
 
+    // ========== MÉTHODES MODIFIÉES (FILTRAGE PAR ENTREPÔT) ==========
+
+    /**
+     * Récupère toutes les réceptions (filtrées par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ReceptionDTO>> getAllReceptions() {
+        return ResponseEntity.ok(receptionService.getAllReceptionsFiltered());
+    }
+
+    /**
+     * Recherche avancée des réceptions (filtrée par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<ReceptionDTO>> searchReceptions(
+            @RequestParam(required = false) String numeroPO,
+            @RequestParam(required = false) String fournisseur,
+            @RequestParam(required = false) ReceptionStatut statut) {
+        return ResponseEntity.ok(receptionService.searchReceptionsFiltered(numeroPO, fournisseur, statut));
+    }
+
+    /**
+     * Récupère toutes les tâches de rangement (filtrées par entrepôt de l'utilisateur connecté)
+     */
     @GetMapping("/putaway")
     @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<List<PutawayTaskDTO>> getAllPutawayTasks() {
-        return ResponseEntity.ok(receptionService.getAllPutawayTasks());
+        return ResponseEntity.ok(receptionService.getAllPutawayTasksFiltered());
     }
 
-    // 🔹 NOUVEL ENDPOINT : Récupérer les informations d'un document scanné
+    // ========== MÉTHODE DOCUMENT (INCHANGÉE) ==========
+
     @GetMapping("/document/{code}")
     @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<ReceptionDTO> getDocumentInfo(@PathVariable String code) {

@@ -1,6 +1,7 @@
 package com.example.pfe.stock.entity;
 
 import com.example.pfe.article.entity.Article;
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -45,6 +46,11 @@ public class Stock {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = false)
+    private Warehouse entrepot;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -86,4 +92,8 @@ public class Stock {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ========== NOUVEAU GETTER/SETTER ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

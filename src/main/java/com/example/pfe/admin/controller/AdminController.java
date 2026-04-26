@@ -41,7 +41,7 @@ public class AdminController {
     public ResponseEntity<UserDTO> updateUserRole(
             @PathVariable Long id,
             @RequestBody RoleUpdateRequest request) {
-        return ResponseEntity.ok(adminService.updateUserRole(id, request.getRole()));
+        return ResponseEntity.ok(adminService.updateUserRole(id, request.getRole(), request.getEntrepotId()));
     }
 
     @PutMapping("/users/{id}/activer")

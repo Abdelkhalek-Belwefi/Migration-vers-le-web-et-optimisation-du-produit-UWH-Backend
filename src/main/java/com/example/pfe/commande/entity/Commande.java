@@ -2,6 +2,7 @@ package com.example.pfe.commande.entity;
 
 import com.example.pfe.client.entity.Client;
 import com.example.pfe.commande.enums.StatutCommande;
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,6 +44,11 @@ public class Commande {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = false)
+    private Warehouse entrepot;
+
     public Commande() {
         this.dateCommande = LocalDateTime.now();
         this.createdAt = LocalDateTime.now();
@@ -50,7 +56,7 @@ public class Commande {
         this.statut = StatutCommande.EN_ATTENTE;
     }
 
-    // Getters et setters
+    // Getters et setters existants (inchangés)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -80,4 +86,8 @@ public class Commande {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ========== NOUVEAU GETTER/SETTER ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

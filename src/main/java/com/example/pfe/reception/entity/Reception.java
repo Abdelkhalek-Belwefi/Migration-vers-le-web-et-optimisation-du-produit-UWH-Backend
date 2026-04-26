@@ -1,6 +1,7 @@
 package com.example.pfe.reception.entity;
 
 import com.example.pfe.auth.entity.User;
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -46,6 +47,11 @@ public class Reception {
     @OneToMany(mappedBy = "reception", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ReceptionLine> lignes = new ArrayList<>();
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = false)
+    private Warehouse entrepot;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -54,7 +60,7 @@ public class Reception {
         }
     }
 
-    // Getters et Setters (inchangés)
+    // Getters et Setters existants (inchangés)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -87,4 +93,8 @@ public class Reception {
 
     public List<ReceptionLine> getLignes() { return lignes; }
     public void setLignes(List<ReceptionLine> lignes) { this.lignes = lignes; }
+
+    // ========== NOUVEAU GETTER/SETTER ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

@@ -4,6 +4,7 @@ import com.example.pfe.article.entity.Article;
 import com.example.pfe.article.repository.ArticleRepository;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.reception.dto.PutawayTaskDTO;
 import com.example.pfe.reception.dto.ReceptionDTO;
 import com.example.pfe.reception.dto.ReceptionLineDTO;
@@ -48,6 +49,8 @@ public class ReceptionService {
         this.stockService = stockService;
     }
 
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
+
     // ==================== CRÉATION ====================
 
     @Transactional
@@ -55,7 +58,6 @@ public class ReceptionService {
         System.out.println("=== CRÉATION RÉCEPTION ===");
         System.out.println("Numéro PO: " + receptionDTO.getNumeroPO());
 
-        // 🔴 MODIFICATION : on vérifie s'il existe déjà, mais on autorise la création
         List<Reception> existingList = receptionRepository.findByNumeroPO(receptionDTO.getNumeroPO());
         if (!existingList.isEmpty()) {
             System.out.println("⚠️ Le PO " + receptionDTO.getNumeroPO() + " existe déjà (IDs: "
@@ -65,6 +67,15 @@ public class ReceptionService {
 
         User currentUser = getCurrentUser();
 
+        if (currentUser == null) {
+            throw new RuntimeException("Utilisateur non connecté");
+        }
+
+        Warehouse userEntrepot = currentUser.getEntrepot();
+        if (userEntrepot == null) {
+            throw new RuntimeException("Impossible de créer une réception : utilisateur non lié à un entrepôt");
+        }
+
         Reception reception = new Reception();
         reception.setNumeroPO(receptionDTO.getNumeroPO());
         reception.setDateReception(receptionDTO.getDateReception() != null ?
@@ -73,6 +84,7 @@ public class ReceptionService {
         reception.setFournisseur(receptionDTO.getFournisseur());
         reception.setBonLivraison(receptionDTO.getBonLivraison());
         reception.setCreateur(currentUser);
+        reception.setEntrepot(userEntrepot);
 
         Reception savedReception = receptionRepository.save(reception);
         System.out.println("✅ Réception créée avec ID: " + savedReception.getId());
@@ -100,7 +112,6 @@ public class ReceptionService {
         return convertToDTO(reception);
     }
 
-    // 🔴 MODIFICATION : gestion de plusieurs réceptions pour un même PO
     public ReceptionDTO getReceptionByPO(String numeroPO) {
         List<Reception> receptions = receptionRepository.findByNumeroPO(numeroPO);
 
@@ -147,10 +158,7 @@ public class ReceptionService {
         line.setReception(reception);
         line.setArticle(article);
         line.setQuantiteAttendue(lineDTO.getQuantiteAttendue());
-
-        // ✅ CORRIGÉ : Utilisation de > 0 au lieu de != null
         line.setQuantiteRecue(lineDTO.getQuantiteRecue() > 0 ? lineDTO.getQuantiteRecue() : 0);
-
         line.setLot(lineDTO.getLot());
         line.setDateExpiration(lineDTO.getDateExpiration());
         line.setEmplacementDestination(lineDTO.getEmplacementDestination());
@@ -255,13 +263,14 @@ public class ReceptionService {
                             ", Lot: " + lot + ", Qté: " + line.getQuantiteRecue() +
                             ", Emplacement: " + emplacement);
 
-                    stockService.augmenterQuantite(
+                    stockService.augmenterQuantiteAvecEntrepot(
                             line.getArticle().getId(),
                             lot,
                             emplacement,
                             line.getQuantiteRecue(),
                             line.getDateExpiration(),
-                            null
+                            null,
+                            reception.getEntrepot().getId()
                     );
 
                     if (line.getEmplacementDestination() != null && !line.getEmplacementDestination().isEmpty()) {
@@ -273,6 +282,7 @@ public class ReceptionService {
                         task.setEmplacementDestination(line.getEmplacementDestination());
                         task.setStatut("A_FAIRE");
                         task.setReception(reception);
+                        task.setEntrepot(reception.getEntrepot());  // ← SEULE LIGNE AJOUTÉE
                         putawayTaskRepository.save(task);
                         tasksCrees++;
                         System.out.println("📋 Tâche de rangement créée pour l'article " + line.getArticle().getId());
@@ -371,29 +381,75 @@ public class ReceptionService {
         return null;
     }
 
-    // 🔹 NOUVELLE MÉTHODE : Traiter un code de document scanné
+    // ========== NOUVELLES MÉTHODES POUR LE FILTRAGE PAR ENTREPÔT ==========
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public List<ReceptionDTO> getAllReceptionsFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Reception> receptions;
+        if (entrepotId != null) {
+            receptions = receptionRepository.findByEntrepotId(entrepotId);
+        } else {
+            receptions = receptionRepository.findAll();
+        }
+        return receptions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<ReceptionDTO> searchReceptionsFiltered(String numeroPO, String fournisseur, ReceptionStatut statut) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Reception> receptions = receptionRepository.searchReceptionsWithEntrepot(entrepotId, numeroPO, fournisseur, statut);
+        return receptions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<ReceptionDTO> getReceptionsByStatutFiltered(ReceptionStatut statut) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Reception> receptions;
+        if (entrepotId != null) {
+            receptions = receptionRepository.findByStatutAndEntrepotId(statut, entrepotId);
+        } else {
+            receptions = receptionRepository.findByStatut(statut);
+        }
+        return receptions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<PutawayTaskDTO> getAllPutawayTasksFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<PutawayTask> tasks;
+        if (entrepotId != null) {
+            tasks = putawayTaskRepository.findByEntrepotId(entrepotId);
+        } else {
+            tasks = putawayTaskRepository.findAll();
+        }
+        return tasks.stream().map(this::convertTaskToDTO).collect(Collectors.toList());
+    }
+
     public ReceptionDTO getDocumentInfo(String code) {
         System.out.println("🔍 Traitement du document scanné: " + code);
 
-        // Pour l'instant, on fait une recherche simple à partir du code
-        // On peut imaginer que le code contient directement le numéro de BL ou de PO
-        // Si le code commence par "PO-", on cherche une réception existante
         if (code.toUpperCase().startsWith("PO-")) {
             try {
                 return getReceptionByPO(code);
             } catch (RuntimeException e) {
-                // Si aucune réception trouvée, on crée un DTO avec le PO
                 ReceptionDTO dto = new ReceptionDTO();
                 dto.setNumeroPO(code);
                 return dto;
             }
         } else if (code.toUpperCase().startsWith("BL-")) {
-            // Pour un BL, on crée un DTO avec le numéro de BL
             ReceptionDTO dto = new ReceptionDTO();
             dto.setBonLivraison(code);
             return dto;
         } else {
-            // Sinon, on retourne un DTO avec le code comme bon de livraison
             ReceptionDTO dto = new ReceptionDTO();
             dto.setBonLivraison(code);
             return dto;

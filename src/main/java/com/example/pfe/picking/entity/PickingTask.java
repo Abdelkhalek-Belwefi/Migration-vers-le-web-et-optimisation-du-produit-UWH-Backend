@@ -3,6 +3,7 @@ package com.example.pfe.picking.entity;
 import com.example.pfe.article.entity.Article;
 import com.example.pfe.commande.entity.Commande;
 import com.example.pfe.commande.entity.LigneCommande;
+import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.picking.enums.StatutPicking;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -42,12 +43,17 @@ public class PickingTask {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = false)
+    private Warehouse entrepot;
+
     public PickingTask() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
-    // Getters et setters
+    // Getters et setters existants (inchangés)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -77,4 +83,8 @@ public class PickingTask {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ========== NOUVEAU GETTER/SETTER ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

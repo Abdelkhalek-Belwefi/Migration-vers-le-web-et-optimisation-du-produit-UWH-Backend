@@ -2,6 +2,7 @@ package com.example.pfe.expedition.entity;
 
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.commande.entity.Commande;
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -53,6 +54,11 @@ public class Expedition {
     @Column(name = "pdf_generated_at")
     private LocalDateTime pdfGeneratedAt;
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id")
+    private Warehouse entrepot;
+
     public Expedition() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -99,4 +105,8 @@ public class Expedition {
 
     public LocalDateTime getPdfGeneratedAt() { return pdfGeneratedAt; }
     public void setPdfGeneratedAt(LocalDateTime pdfGeneratedAt) { this.pdfGeneratedAt = pdfGeneratedAt; }
+
+    // ========== NOUVEAU GETTER/SETTER POUR ENTREPÔT ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

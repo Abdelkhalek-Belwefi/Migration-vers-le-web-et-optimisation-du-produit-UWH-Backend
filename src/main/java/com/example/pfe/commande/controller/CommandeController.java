@@ -20,29 +20,12 @@ public class CommandeController {
         this.commandeService = commandeService;
     }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<CommandeDTO>> getAllCommandes() {
-        return ResponseEntity.ok(commandeService.getAllCommandes());
-    }
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
     public ResponseEntity<CommandeDTO> getCommandeById(@PathVariable Long id) {
         return ResponseEntity.ok(commandeService.getCommandeById(id));
-    }
-
-    @GetMapping("/statut/{statut}")
-    @PreAuthorize("hasAnyRole('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<CommandeDTO>> getCommandesByStatut(@PathVariable String statut) {
-        StatutCommande statutEnum = StatutCommande.valueOf(statut.toUpperCase());
-        return ResponseEntity.ok(commandeService.getCommandesByStatut(statutEnum));
-    }
-
-    @GetMapping("/a-expedier")
-    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<CommandeDTO>> getCommandesAExpedier() {
-        return ResponseEntity.ok(commandeService.getCommandesAExpedier());
     }
 
     @PostMapping
@@ -55,6 +38,63 @@ public class CommandeController {
     @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
     public ResponseEntity<CommandeDTO> updateCommande(@PathVariable Long id, @RequestBody CommandeDTO commandeDTO) {
         return ResponseEntity.ok(commandeService.updateCommande(id, commandeDTO));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
+    public ResponseEntity<Void> deleteCommande(@PathVariable Long id) {
+        commandeService.deleteCommande(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // ========== MÉTHODES MODIFIÉES (FILTRAGE PAR ENTREPÔT) ==========
+
+    /**
+     * Récupère toutes les commandes
+     * - SERVICE_COMMERCIAL / ADMIN : voit tout (pas de filtre)
+     * - RESPONSABLE_ENTREPOT / OPERATEUR_ENTREPOT : voit uniquement son entrepôt
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR', 'RESPONSABLE_ENTREPOT', 'OPERATEUR_ENTREPOT')")
+    public ResponseEntity<List<CommandeDTO>> getAllCommandes() {
+        // Pour SERVICE_COMMERCIAL et ADMIN, on garde le comportement original (tout voir)
+        String role = getCurrentUserRole();
+        if ("SERVICE_COMMERCIAL".equals(role) || "ADMINISTRATEUR".equals(role)) {
+            return ResponseEntity.ok(commandeService.getAllCommandes());
+        }
+        // Pour RESPONSABLE_ENTREPOT et OPERATEUR_ENTREPOT, on filtre par entrepôt
+        return ResponseEntity.ok(commandeService.getAllCommandesFiltered());
+    }
+
+    /**
+     * Récupère les commandes par statut
+     * - SERVICE_COMMERCIAL / ADMIN : voit tout
+     * - RESPONSABLE_ENTREPOT / OPERATEUR_ENTREPOT : voit uniquement son entrepôt
+     */
+    @GetMapping("/statut/{statut}")
+    @PreAuthorize("hasAnyRole('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<CommandeDTO>> getCommandesByStatut(@PathVariable String statut) {
+        StatutCommande statutEnum = StatutCommande.valueOf(statut.toUpperCase());
+        String role = getCurrentUserRole();
+
+        if ("SERVICE_COMMERCIAL".equals(role) || "ADMINISTRATEUR".equals(role)) {
+            return ResponseEntity.ok(commandeService.getCommandesByStatut(statutEnum));
+        }
+        return ResponseEntity.ok(commandeService.getCommandesByStatutFiltered(statutEnum));
+    }
+
+    /**
+     * Récupère les commandes à expédier
+     * - RESPONSABLE_ENTREPOT uniquement, filtre par son entrepôt
+     */
+    @GetMapping("/a-expedier")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<CommandeDTO>> getCommandesAExpedier() {
+        String role = getCurrentUserRole();
+        if ("ADMINISTRATEUR".equals(role)) {
+            return ResponseEntity.ok(commandeService.getCommandesAExpedier());
+        }
+        return ResponseEntity.ok(commandeService.getCommandesAExpedierFiltered());
     }
 
     @PatchMapping("/{id}/statut")
@@ -74,10 +114,24 @@ public class CommandeController {
         return ResponseEntity.ok(commandeService.updateStatut(id, statutEnum));
     }
 
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SERVICE_COMMERCIAL', 'ADMINISTRATEUR')")
-    public ResponseEntity<Void> deleteCommande(@PathVariable Long id) {
-        commandeService.deleteCommande(id);
-        return ResponseEntity.ok().build();
+    // ========== MÉTHODE UTILITAIRE POUR RÉCUPÉRER LE RÔLE ==========
+
+    private String getCurrentUserRole() {
+        org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getAuthorities()
+                .forEach(authority -> {
+                    // Récupération du rôle
+                });
+        // Alternative plus simple
+        return org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getAuthorities()
+                .stream()
+                .findFirst()
+                .map(auth -> auth.getAuthority())
+                .orElse("");
     }
 }

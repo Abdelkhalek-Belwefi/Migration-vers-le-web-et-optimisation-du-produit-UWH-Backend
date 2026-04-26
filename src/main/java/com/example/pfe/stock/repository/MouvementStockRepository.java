@@ -27,4 +27,16 @@ public interface MouvementStockRepository extends JpaRepository<MouvementStock, 
     List<MouvementStock> searchMouvements(@Param("articleId") Long articleId,
                                           @Param("type") String type,
                                           @Param("motif") String motif);
+
+    // ========== NOUVELLE MÉTHODE POUR LE FILTRAGE PAR ENTREPÔT ==========
+
+    /**
+     * Récupère tous les mouvements liés à un entrepôt spécifique
+     * (via le stock source ou le stock destination)
+     */
+    @Query("SELECT m FROM MouvementStock m WHERE " +
+            "(:entrepotId IS NULL OR " +
+            "m.stockSource.entrepot.id = :entrepotId OR " +
+            "m.stockDestination.entrepot.id = :entrepotId)")
+    List<MouvementStock> findByEntrepotId(@Param("entrepotId") Long entrepotId);
 }

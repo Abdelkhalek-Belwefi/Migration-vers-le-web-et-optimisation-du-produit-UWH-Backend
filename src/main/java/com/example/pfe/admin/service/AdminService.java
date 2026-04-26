@@ -4,6 +4,8 @@ import com.example.pfe.admin.dto.UserDTO;
 import com.example.pfe.auth.entity.Role;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.entrepot.entity.Warehouse;
+import com.example.pfe.entrepot.repository.WarehouseRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,10 +19,14 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final WarehouseRepository warehouseRepository;  // ← NOUVEAU
 
-    public AdminService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AdminService(UserRepository userRepository,
+                        PasswordEncoder passwordEncoder,
+                        WarehouseRepository warehouseRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.warehouseRepository = warehouseRepository;
     }
 
     public List<UserDTO> getAllUsers() {
@@ -53,8 +59,9 @@ public class AdminService {
         return convertToDTO(updatedUser);
     }
 
+    // 🔹 MODIFIÉE : ajout du paramètre entrepotId
     @Transactional
-    public UserDTO updateUserRole(Long userId, String newRole) {
+    public UserDTO updateUserRole(Long userId, String newRole, Long entrepotId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         try {
@@ -64,6 +71,16 @@ public class AdminService {
             if (!user.isEstActif() && role != Role.OPERATOR) {
                 user.setEstActif(true);
             }
+
+            // 🔹 NOUVEAU : assigner ou retirer l'entrepôt
+            if (entrepotId != null) {
+                Warehouse warehouse = warehouseRepository.findById(entrepotId)
+                        .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
+                user.setEntrepot(warehouse);
+            } else {
+                user.setEntrepot(null);
+            }
+
             User updatedUser = userRepository.save(user);
             return convertToDTO(updatedUser);
         } catch (IllegalArgumentException e) {
@@ -85,6 +102,7 @@ public class AdminService {
                 .collect(Collectors.toList());
     }
 
+    // 🔹 MODIFIÉE : ajout de l'entrepôt dans la création
     @Transactional
     public UserDTO createUser(UserDTO userDTO) {
         if (userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
@@ -97,12 +115,20 @@ public class AdminService {
         user.setEmail(userDTO.getEmail());
         user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         user.setRole(Role.valueOf(userDTO.getRole()));
-        user.setEstActif(true); // Si l'admin crée directement, le compte est actif
+        user.setEstActif(true);
+
+        // 🔹 NOUVEAU : assigner l'entrepôt si fourni
+        if (userDTO.getEntrepotId() != null) {
+            Warehouse warehouse = warehouseRepository.findById(userDTO.getEntrepotId())
+                    .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
+            user.setEntrepot(warehouse);
+        }
 
         User savedUser = userRepository.save(user);
         return convertToDTO(savedUser);
     }
 
+    // 🔹 MODIFIÉE : ajout des informations entrepôt dans le DTO
     private UserDTO convertToDTO(User user) {
         UserDTO dto = new UserDTO();
         dto.setId(user.getId());
@@ -112,6 +138,13 @@ public class AdminService {
         dto.setRole(user.getRole().name());
         dto.setEstActif(user.isEstActif());
         dto.setCreatedAt(user.getCreatedAt());
+
+        // 🔹 NOUVEAU : ajouter les infos de l'entrepôt si présent
+        if (user.getEntrepot() != null) {
+            dto.setEntrepotId(user.getEntrepot().getId());
+            dto.setEntrepotNom(user.getEntrepot().getNom());
+        }
+
         return dto;
     }
 }

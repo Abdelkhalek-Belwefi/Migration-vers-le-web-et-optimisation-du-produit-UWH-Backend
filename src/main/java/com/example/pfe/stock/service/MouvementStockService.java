@@ -31,6 +31,8 @@ public class MouvementStockService {
         this.userRepository = userRepository;
     }
 
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
+
     @Transactional
     public MouvementStockDTO entreeStock(Long stockId, int quantite, String motif, String commentaire) {
         System.out.println("=== ENTREE STOCK ===");
@@ -65,6 +67,8 @@ public class MouvementStockService {
                 ancienneQuantite, stock.getQuantite(), null, null, motif, commentaire);
     }
 
+    // ========== MÉTHODE TRANSFERT CORRIGÉE ==========
+
     @Transactional
     public MouvementStockDTO transfererStock(Long stockIdSource, String emplacementDestination,
                                              int quantite, String motif, String commentaire) {
@@ -74,7 +78,6 @@ public class MouvementStockService {
         Stock stockSource = stockRepository.findById(stockIdSource)
                 .orElseThrow(() -> new RuntimeException("Stock source non trouvé"));
 
-        // 🔴 Interdire le transfert si le stock source est bloqué
         if (stockSource.getStatut() == StockStatut.BLOQUE) {
             throw new RuntimeException("Impossible de transférer un stock bloqué");
         }
@@ -105,6 +108,7 @@ public class MouvementStockService {
             stockDestination.setStatut(stockSource.getStatut());
             stockDestination.setDateExpiration(stockSource.getDateExpiration());
             stockDestination.setDateReception(stockSource.getDateReception());
+            stockDestination.setEntrepot(stockSource.getEntrepot());  // ← LIGNE AJOUTÉE
             stockRepository.save(stockDestination);
         } else {
             ancienneQteDest = stockDestination.getQuantite();
@@ -151,11 +155,24 @@ public class MouvementStockService {
                 .collect(Collectors.toList());
     }
 
+    // ========== MÉTHODE MODIFIÉE (FILTRAGE PAR ENTREPÔT) ==========
+
     public List<MouvementStockDTO> getAllMouvements() {
-        return mouvementRepository.findAll().stream()
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<MouvementStock> mouvements;
+
+        if (entrepotId != null) {
+            mouvements = mouvementRepository.findByEntrepotId(entrepotId);
+        } else {
+            mouvements = mouvementRepository.findAll();
+        }
+
+        return mouvements.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
+
+    // ========== NOUVELLES MÉTHODES POUR LE FILTRAGE ==========
 
     private User getCurrentUser() {
         try {
@@ -170,6 +187,40 @@ public class MouvementStockService {
         }
         return null;
     }
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public List<MouvementStockDTO> getMouvementsByStockFiltered(Long stockId) {
+        Long entrepotId = getCurrentUserEntrepotId();
+
+        List<MouvementStock> mouvements = mouvementRepository.findByStockSourceId(stockId);
+        mouvements.addAll(mouvementRepository.findByStockDestinationId(stockId));
+
+        if (entrepotId != null) {
+            mouvements = mouvements.stream()
+                    .filter(m -> (m.getStockSource() != null && m.getStockSource().getEntrepot() != null
+                            && m.getStockSource().getEntrepot().getId().equals(entrepotId)) ||
+                            (m.getStockDestination() != null && m.getStockDestination().getEntrepot() != null
+                                    && m.getStockDestination().getEntrepot().getId().equals(entrepotId)))
+                    .collect(Collectors.toList());
+        }
+
+        return mouvements.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    // ========== CONVERSION (INCHANGÉE) ==========
 
     private MouvementStockDTO convertToDTO(MouvementStock mouvement) {
         MouvementStockDTO dto = new MouvementStockDTO();

@@ -11,10 +11,19 @@ public class UserDTO {
     private String role;
     private boolean estActif;
     private LocalDateTime createdAt;
+    private Long entrepotId;
+    private String entrepotNom;
 
     public UserDTO() {}
 
     // Getters et Setters
+    // Getters et setters
+    public Long getEntrepotId() { return entrepotId; }
+    public void setEntrepotId(Long entrepotId) { this.entrepotId = entrepotId; }
+
+    public String getEntrepotNom() { return entrepotNom; }
+    public void setEntrepotNom(String entrepotNom) { this.entrepotNom = entrepotNom; }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

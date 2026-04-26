@@ -19,32 +19,7 @@ public class RangementController {
         this.rangementService = rangementService;
     }
 
-    /**
-     * Liste toutes les tâches à faire
-     */
-    @GetMapping("/a-faire")
-    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<PutawayTaskDTO>> getTasksAFaire() {
-        return ResponseEntity.ok(rangementService.getTasksAFaire());
-    }
-
-    /**
-     * Liste toutes les tâches (pour supervision)
-     */
-    @GetMapping
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<PutawayTaskDTO>> getAllTasks() {
-        return ResponseEntity.ok(rangementService.getAllTasks());
-    }
-
-    /**
-     * Liste les tâches par statut
-     */
-    @GetMapping("/statut/{statut}")
-    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<PutawayTaskDTO>> getTasksByStatut(@PathVariable String statut) {
-        return ResponseEntity.ok(rangementService.getTasksByStatut(statut));
-    }
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     /**
      * Commencer une tâche
@@ -64,5 +39,34 @@ public class RangementController {
             @PathVariable Long id,
             @RequestParam(required = false) String emplacementReel) {
         return ResponseEntity.ok(rangementService.terminerTask(id, emplacementReel));
+    }
+
+    // ========== MÉTHODES MODIFIÉES (FILTRAGE PAR ENTREPÔT) ==========
+
+    /**
+     * Liste toutes les tâches à faire (filtrées par entrepôt)
+     */
+    @GetMapping("/a-faire")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<PutawayTaskDTO>> getTasksAFaire() {
+        return ResponseEntity.ok(rangementService.getTasksAFaireFiltered());
+    }
+
+    /**
+     * Liste toutes les tâches pour supervision (filtrées par entrepôt)
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<PutawayTaskDTO>> getAllTasks() {
+        return ResponseEntity.ok(rangementService.getAllTasksFiltered());
+    }
+
+    /**
+     * Liste les tâches par statut (filtrées par entrepôt)
+     */
+    @GetMapping("/statut/{statut}")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<PutawayTaskDTO>> getTasksByStatut(@PathVariable String statut) {
+        return ResponseEntity.ok(rangementService.getTasksByStatutFiltered(statut));
     }
 }

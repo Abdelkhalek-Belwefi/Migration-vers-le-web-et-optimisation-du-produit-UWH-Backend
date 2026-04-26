@@ -1,5 +1,6 @@
 package com.example.pfe.auth.entity;
 
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -41,6 +42,10 @@ public class User implements UserDetails {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = true)
+    private Warehouse entrepot;  // entrepot assigné (null = rôle global)
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -60,6 +65,10 @@ public class User implements UserDetails {
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
+    // Getters et setters
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 
     @Override
     public String getPassword() { return password; }

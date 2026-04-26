@@ -1,6 +1,7 @@
 package com.example.pfe.reception.entity;
 
 import com.example.pfe.article.entity.Article;
+import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -41,12 +42,17 @@ public class PutawayTask {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    @ManyToOne
+    @JoinColumn(name = "entrepot_id", nullable = false)
+    private Warehouse entrepot;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
 
-    // --- Getters et Setters ---
+    // --- Getters et Setters existants (inchangés) ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -76,4 +82,8 @@ public class PutawayTask {
 
     public LocalDateTime getCompletedAt() { return completedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+
+    // ========== NOUVEAU GETTER/SETTER ==========
+    public Warehouse getEntrepot() { return entrepot; }
+    public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 }

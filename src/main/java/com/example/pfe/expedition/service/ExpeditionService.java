@@ -15,7 +15,7 @@ import com.example.pfe.expedition.util.BarcodeUtil;
 import com.example.pfe.livraison.entity.Livraison;
 import com.example.pfe.livraison.entity.LivraisonStatut;
 import com.example.pfe.livraison.repository.LivraisonRepository;
-import com.example.pfe.service.EmailService;                    // ← AJOUT
+import com.example.pfe.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -37,7 +37,7 @@ public class ExpeditionService {
     private LivraisonRepository livraisonRepository;
 
     @Autowired
-    private EmailService emailService;                        // ← AJOUT
+    private EmailService emailService;
 
     public ExpeditionService(ExpeditionRepository expeditionRepository,
                              CommandeRepository commandeRepository,
@@ -47,7 +47,7 @@ public class ExpeditionService {
         this.userRepository = userRepository;
     }
 
-    // ========== MÉTHODES EXISTANTES (inchangées) ==========
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     public List<ExpeditionDTO> getAllExpeditions() {
         return expeditionRepository.findAll().stream()
@@ -149,7 +149,6 @@ public class ExpeditionService {
         return dto;
     }
 
-    // ========== NOUVELLE MÉTHODE POUR RÉCUPÉRER LES EXPÉDITIONS DE L'UTILISATEUR CONNECTÉ ==========
     public List<ExpeditionDTO> getExpeditionsByCurrentUser() {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -162,7 +161,6 @@ public class ExpeditionService {
                 .collect(Collectors.toList());
     }
 
-    // ========== MÉTHODE POUR GÉNÉRER LE BON DE LIVRAISON (HTML) – MODIFIÉE ==========
     public String generateExpeditionPrintHtml(Long expeditionId) {
         Expedition expedition = expeditionRepository.findById(expeditionId)
                 .orElseThrow(() -> new RuntimeException("Expédition non trouvée"));
@@ -172,7 +170,6 @@ public class ExpeditionService {
         String clientNom = commande.getClient().getNom() + " " + commande.getClient().getPrenom();
         String clientAdresse = commande.getClient().getAdresse() != null ? commande.getClient().getAdresse() : "";
 
-        // Génération des deux codes-barres principaux (BL et Commande)
         String barcodeBL = BarcodeUtil.generateDataMatrixBase64(expedition.getNumeroBL(), 200, 200);
         String barcodeCommande = BarcodeUtil.generateDataMatrixBase64(commande.getNumeroCommande(), 200, 200);
 
@@ -213,7 +210,6 @@ public class ExpeditionService {
         html.append("</table>");
         html.append("<div class='separator'></div>");
 
-        // Tableau des articles avec colonne code-barres (basé sur GTIN)
         html.append("<table class='articles-table'>");
         html.append("<thead><tr><th>Référence</th><th>Désignation</th><th>Qté</th><th>Code-barre</th></tr></thead><tbody>");
 
@@ -226,12 +222,11 @@ public class ExpeditionService {
                 designation = ligne.getArticle().getDesignation();
             }
 
-            // Récupération du GTIN (fallback sur le code article si absent)
             String gtin = "";
             if (ligne.getArticle() != null && ligne.getArticle().getGtin() != null && !ligne.getArticle().getGtin().isBlank()) {
                 gtin = ligne.getArticle().getGtin();
             } else if (!code.isEmpty()) {
-                gtin = code; // fallback
+                gtin = code;
             }
 
             String barcodeArticle = "";
@@ -256,7 +251,6 @@ public class ExpeditionService {
         html.append("</tbody></table>");
         html.append("<div class='separator'></div>");
 
-        // Section codes-barres principaux (BL + Commande) côte à côte
         html.append("<div class='barcode'>");
         html.append("<div class='barcode-item'>");
         html.append("<img src='data:image/png;base64,").append(barcodeBL).append("' alt='Code-barres BL' />");
@@ -288,7 +282,6 @@ public class ExpeditionService {
                 .collect(Collectors.toList());
     }
 
-    // ========== MÉTHODE UTILITAIRE (déjà existante, non modifiée) ==========
     @Transactional
     public ExpeditionDTO assignerTransporteur(Long expeditionId, Long transporteurId) {
         Expedition expedition = expeditionRepository.findById(expeditionId)
@@ -298,7 +291,8 @@ public class ExpeditionService {
         return convertToDTO(expeditionRepository.save(expedition));
     }
 
-    // ========== NOUVELLE MÉTHODE AVEC ID TRANSPORTEUR (crée une Livraison) ==========
+    // ========== MÉTHODE CORRIGÉE ==========
+
     @Transactional
     public ExpeditionDTO expedierCommandeWithTransporteurId(Long commandeId, Long transporteurId) {
         Commande commande = commandeRepository.findById(commandeId)
@@ -316,7 +310,6 @@ public class ExpeditionService {
             throw new RuntimeException("L'utilisateur n'a pas le rôle TRANSPORTEUR");
         }
 
-        // Création de l'expédition
         Expedition expedition = new Expedition();
         expedition.setCommande(commande);
         expedition.setNumeroBL(generateNumeroBL());
@@ -324,15 +317,14 @@ public class ExpeditionService {
         expedition.setStatut(ExpeditionStatut.EXPEDIEE);
         expedition.setDateExpedition(LocalDateTime.now());
         expedition.setPreparePar(getCurrentUser());
+        expedition.setEntrepot(commande.getEntrepot());  // ← AJOUT
 
         Expedition saved = expeditionRepository.save(expedition);
 
-        // Mise à jour commande
         commande.setStatut(StatutCommande.EXPEDIEE);
         commande.setUpdatedAt(LocalDateTime.now());
         commandeRepository.save(commande);
 
-        // Création de la livraison associée
         Livraison livraison = new Livraison();
         livraison.setExpedition(saved);
         livraison.setTransporteur(transporteur);
@@ -341,7 +333,6 @@ public class ExpeditionService {
         livraison.setDateAssignation(LocalDateTime.now());
         livraisonRepository.save(livraison);
 
-        // ========== ENVOI DE L'OTP PAR EMAIL ==========
         try {
             String clientEmail = commande.getClient().getEmail();
             if (clientEmail != null && !clientEmail.isEmpty()) {
@@ -352,16 +343,82 @@ public class ExpeditionService {
             }
         } catch (Exception e) {
             System.err.println("Erreur lors de l'envoi de l'email : " + e.getMessage());
-            // L'expédition reste valide même si l'email échoue
         }
 
         return convertToDTO(saved);
     }
 
-    // Méthode utilitaire pour générer un OTP à 6 chiffres
     private String generateOtp() {
         java.security.SecureRandom random = new java.security.SecureRandom();
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
+    }
+
+    // ========== MÉTHODES DE FILTRAGE ==========
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public List<ExpeditionDTO> getAllExpeditionsFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Expedition> expeditions;
+        if (entrepotId != null) {
+            expeditions = expeditionRepository.findByEntrepotId(entrepotId);
+        } else {
+            expeditions = expeditionRepository.findAll();
+        }
+        return expeditions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<ExpeditionDTO> getExpeditionsByStatutFiltered(ExpeditionStatut statut) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Expedition> expeditions;
+        if (entrepotId != null) {
+            expeditions = expeditionRepository.findByStatutAndEntrepotId(statut, entrepotId);
+        } else {
+            expeditions = expeditionRepository.findByStatut(statut);
+        }
+        return expeditions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<ExpeditionDTO> getExpeditionsByCurrentUserFiltered() {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("Utilisateur non connecté");
+        }
+
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Expedition> expeditions;
+        if (entrepotId != null) {
+            expeditions = expeditionRepository.findByPrepareParIdAndEntrepotId(currentUser.getId(), entrepotId);
+        } else {
+            expeditions = expeditionRepository.findAll().stream()
+                    .filter(exp -> exp.getPreparePar() != null && exp.getPreparePar().getId().equals(currentUser.getId()))
+                    .collect(Collectors.toList());
+        }
+        return expeditions.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<ExpeditionDTO> getAllExpeditionsForListFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Expedition> expeditions;
+        if (entrepotId != null) {
+            expeditions = expeditionRepository.findByEntrepotId(entrepotId);
+        } else {
+            expeditions = expeditionRepository.findAll();
+        }
+        return expeditions.stream()
+                .sorted((e1, e2) -> e2.getDateExpedition().compareTo(e1.getDateExpedition()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 }

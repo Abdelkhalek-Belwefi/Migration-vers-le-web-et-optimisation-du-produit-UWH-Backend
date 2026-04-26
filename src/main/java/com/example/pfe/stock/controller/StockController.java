@@ -21,23 +21,12 @@ public class StockController {
         this.stockService = stockService;
     }
 
-    // --- Consultation ---
-    @GetMapping
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<StockDTO>> getAllStocks() {
-        return ResponseEntity.ok(stockService.getAllStocks());
-    }
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<StockDTO> getStockById(@PathVariable Long id) {
         return ResponseEntity.ok(stockService.getStockById(id));
-    }
-
-    @GetMapping("/article/{articleId}")
-    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
-    public ResponseEntity<List<StockDTO>> getStocksByArticle(@PathVariable Long articleId) {
-        return ResponseEntity.ok(stockService.getStocksByArticle(articleId));
     }
 
     @GetMapping("/lot/{lot}")
@@ -46,6 +35,29 @@ public class StockController {
         return ResponseEntity.ok(stockService.getStockByLot(lot));
     }
 
+    // ========== MÉTHODES MODIFIÉES (FILTRAGE PAR ENTREPÔT) ==========
+
+    /**
+     * Récupère tous les stocks (filtrés par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<StockDTO>> getAllStocks() {
+        return ResponseEntity.ok(stockService.getAllStocksFiltered());
+    }
+
+    /**
+     * Récupère les stocks d'un article (filtrés par entrepôt de l'utilisateur connecté)
+     */
+    @GetMapping("/article/{articleId}")
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<StockDTO>> getStocksByArticle(@PathVariable Long articleId) {
+        return ResponseEntity.ok(stockService.getStocksByArticleFiltered(articleId));
+    }
+
+    /**
+     * Recherche avancée des stocks (filtrée par entrepôt de l'utilisateur connecté)
+     */
     @GetMapping("/search")
     @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<List<StockDTO>> searchStocks(
@@ -53,10 +65,11 @@ public class StockController {
             @RequestParam(required = false) String lot,
             @RequestParam(required = false) String emplacement,
             @RequestParam(required = false) StockStatut statut) {
-        return ResponseEntity.ok(stockService.searchStocks(articleId, lot, emplacement, statut));
+        return ResponseEntity.ok(stockService.searchStocksFiltered(articleId, lot, emplacement, statut));
     }
 
-    // --- Mouvements ---
+    // ========== MÉTHODES DE MOUVEMENT (INCHANGÉES) ==========
+
     @PostMapping("/augmenter")
     @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<StockDTO> augmenterQuantite(
@@ -78,7 +91,6 @@ public class StockController {
         return ResponseEntity.ok(stockService.diminuerQuantite(stockId, quantite));
     }
 
-    // ✅ Changement de statut - Vérifiez que cette méthode existe bien
     @PutMapping("/{id}/statut")
     @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
     public ResponseEntity<StockDTO> changerStatut(

@@ -2,10 +2,18 @@ package com.example.pfe.stock.service;
 
 import com.example.pfe.article.entity.Article;
 import com.example.pfe.article.repository.ArticleRepository;
+import com.example.pfe.auth.entity.User;
+import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.entrepot.entity.Warehouse;
+import com.example.pfe.entrepot.repository.WarehouseRepository;
 import com.example.pfe.stock.dto.StockDTO;
+import com.example.pfe.stock.entity.MouvementStock;
 import com.example.pfe.stock.entity.Stock;
 import com.example.pfe.stock.entity.StockStatut;
+import com.example.pfe.stock.repository.MouvementStockRepository;
 import com.example.pfe.stock.repository.StockRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,16 +26,26 @@ public class StockService {
 
     private final StockRepository stockRepository;
     private final ArticleRepository articleRepository;
+    private final UserRepository userRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final MouvementStockRepository mouvementRepository;
 
-    // Seuil de blocage automatique
     private static final int SEUIL_BLOCAGE = 1000;
 
-    public StockService(StockRepository stockRepository, ArticleRepository articleRepository) {
+    public StockService(StockRepository stockRepository,
+                        ArticleRepository articleRepository,
+                        UserRepository userRepository,
+                        WarehouseRepository warehouseRepository,
+                        MouvementStockRepository mouvementRepository) {
         this.stockRepository = stockRepository;
         this.articleRepository = articleRepository;
+        this.userRepository = userRepository;
+        this.warehouseRepository = warehouseRepository;
+        this.mouvementRepository = mouvementRepository;
     }
 
-    // --- Consultation ---
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
+
     public List<StockDTO> getAllStocks() {
         return stockRepository.findAll().stream()
                 .map(this::convertToDTO)
@@ -67,7 +85,6 @@ public class StockService {
                 .collect(Collectors.toList());
     }
 
-    // --- Mouvements ---
     @Transactional
     public StockDTO augmenterQuantite(Long articleId, String lot, String emplacement, int quantite,
                                       LocalDateTime dateExpiration, StockStatut statut) {
@@ -97,7 +114,48 @@ public class StockService {
             stock.setDateExpiration(dateExpiration);
         }
 
-        // 🔴 Règle métier : si la quantité dépasse le seuil, bloquer automatiquement
+        if (nouvelleQuantite >= SEUIL_BLOCAGE) {
+            stock.setStatut(StockStatut.BLOQUE);
+        } else {
+            stock.setStatut(statut != null ? statut : StockStatut.DISPONIBLE);
+        }
+
+        return convertToDTO(stockRepository.save(stock));
+    }
+
+    @Transactional
+    public StockDTO augmenterQuantiteAvecEntrepot(Long articleId, String lot, String emplacement, int quantite,
+                                                  LocalDateTime dateExpiration, StockStatut statut, Long entrepotId) {
+        Article article = articleRepository.findById(articleId)
+                .orElseThrow(() -> new RuntimeException("Article non trouvé"));
+
+        Warehouse entrepot = warehouseRepository.findById(entrepotId)
+                .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
+
+        Stock stock = stockRepository.findByLotAndEntrepotId(lot, entrepotId)
+                .stream()
+                .filter(s -> s.getArticle().getId().equals(articleId)
+                        && s.getEmplacement().equalsIgnoreCase(emplacement))
+                .findFirst()
+                .orElse(null);
+
+        int nouvelleQuantite;
+        if (stock != null) {
+            nouvelleQuantite = stock.getQuantite() + quantite;
+            stock.setQuantite(nouvelleQuantite);
+            if (dateExpiration != null) stock.setDateExpiration(dateExpiration);
+        } else {
+            nouvelleQuantite = quantite;
+            stock = new Stock();
+            stock.setArticle(article);
+            stock.setLot(lot);
+            stock.setEmplacement(emplacement);
+            stock.setQuantite(quantite);
+            stock.setDateReception(LocalDateTime.now());
+            stock.setDateExpiration(dateExpiration);
+            stock.setEntrepot(entrepot);
+        }
+
         if (nouvelleQuantite >= SEUIL_BLOCAGE) {
             stock.setStatut(StockStatut.BLOQUE);
         } else {
@@ -112,7 +170,6 @@ public class StockService {
         Stock stock = stockRepository.findById(stockId)
                 .orElseThrow(() -> new RuntimeException("Stock non trouvé"));
 
-        // 🔴 Interdire la diminution si le stock est bloqué
         if (stock.getStatut() == StockStatut.BLOQUE) {
             throw new RuntimeException("Impossible de diminuer un stock bloqué");
         }
@@ -125,7 +182,6 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
-    // --- Changement de statut ---
     @Transactional
     public StockDTO changerStatut(Long stockId, StockStatut nouveauStatut) {
         Stock stock = stockRepository.findById(stockId)
@@ -134,24 +190,107 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
-    // ✅ Nouvelle méthode – décrémente le stock par articleId
+    // ========== MÉTHODE DECREMENT STOCK CORRIGÉE ==========
+
     @Transactional
-    public void decrementStock(Long articleId, int quantity) {
-        List<Stock> stocks = stockRepository.findByArticleId(articleId);
+    public void decrementStock(Long articleId, int quantity, Long entrepotId, String lot) {
+        List<Stock> stocks = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId)
+                .stream()
+                .filter(s -> s.getLot().equals(lot))
+                .collect(Collectors.toList());
+
         if (stocks.isEmpty()) {
-            throw new RuntimeException("Aucun stock trouvé pour l'article " + articleId);
+            throw new RuntimeException("Aucun stock trouvé pour l'article " + articleId +
+                    " avec le lot " + lot + " dans l'entrepôt " + entrepotId);
         }
-        // On prend le premier stock de l'article (à adapter selon la logique métier)
+
         Stock stock = stocks.get(0);
-        if (stock.getQuantite() < quantity) {
-            throw new RuntimeException("Stock insuffisant pour l'article " + articleId);
+        int ancienneQuantite = stock.getQuantite();
+
+        if (ancienneQuantite < quantity) {
+            throw new RuntimeException("Stock insuffisant pour l'article " + articleId +
+                    ". Disponible: " + ancienneQuantite);
         }
-        stock.setQuantite(stock.getQuantite() - quantity);
+
+        stock.setQuantite(ancienneQuantite - quantity);
         stock.setUpdatedAt(LocalDateTime.now());
         stockRepository.save(stock);
+
+        User currentUser = getCurrentUser();
+        if (currentUser != null) {
+            MouvementStock mouvement = new MouvementStock();
+            mouvement.setStockSource(stock);
+            mouvement.setType("SORTIE");
+            mouvement.setQuantite(quantity);
+            mouvement.setMotif("VENTE");
+            mouvement.setUtilisateur(currentUser);
+            mouvement.setAncienneQuantiteSource(ancienneQuantite);
+            mouvement.setNouvelleQuantiteSource(stock.getQuantite());
+            mouvement.setDateMouvement(LocalDateTime.now());
+            mouvementRepository.save(mouvement);
+            System.out.println("📦 Mouvement de stock enregistré : sortie de " + quantity +
+                    " unités pour l'article " + articleId + " (lot: " + lot + ")");
+        }
     }
 
-    // --- Conversion ---
+    // ========== MÉTHODES AVEC FILTRE PAR ENTREPÔT ==========
+
+    private User getCurrentUser() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof UserDetails) {
+                String email = ((UserDetails) principal).getUsername();
+                return userRepository.findByEmail(email).orElse(null);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public List<StockDTO> getAllStocksFiltered() {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Stock> stocks;
+        if (entrepotId != null) {
+            stocks = stockRepository.findByEntrepotId(entrepotId);
+        } else {
+            stocks = stockRepository.findAll();
+        }
+        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<StockDTO> getStocksByArticleFiltered(Long articleId) {
+        if (!articleRepository.existsById(articleId)) {
+            throw new RuntimeException("Article non trouvé");
+        }
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Stock> stocks;
+        if (entrepotId != null) {
+            stocks = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId);
+        } else {
+            stocks = stockRepository.findByArticleId(articleId);
+        }
+        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    public List<StockDTO> searchStocksFiltered(Long articleId, String lot, String emplacement, StockStatut statut) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Stock> stocks = stockRepository.searchStocksWithEntrepot(entrepotId, articleId, lot, emplacement, statut);
+        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
     private StockDTO convertToDTO(Stock stock) {
         StockDTO dto = new StockDTO();
         dto.setId(stock.getId());
