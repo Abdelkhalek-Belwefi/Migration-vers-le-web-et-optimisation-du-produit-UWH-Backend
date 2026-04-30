@@ -98,4 +98,16 @@ public class StockController {
             @RequestParam StockStatut statut) {
         return ResponseEntity.ok(stockService.changerStatut(id, statut));
     }
+
+    // ========== NOUVELLE MÉTHODE : Récupérer les stocks faibles ==========
+    @GetMapping("/faibles")
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<StockDTO>> getStocksFaibles(@RequestParam(defaultValue = "20") int seuil) {
+        return ResponseEntity.ok(stockService.getStocksFaiblesFiltered(seuil));
+    }
+    @GetMapping("/article/{articleId}/entrepot/{entrepotId}")
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<StockDTO> getStockByArticleAndEntrepot(@PathVariable Long articleId, @PathVariable Long entrepotId) {
+        return ResponseEntity.ok(stockService.getStockByArticleAndEntrepot(articleId, entrepotId));
+    }
 }

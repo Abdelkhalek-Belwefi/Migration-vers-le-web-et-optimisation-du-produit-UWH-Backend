@@ -114,6 +114,44 @@ public class CommandeController {
         return ResponseEntity.ok(commandeService.updateStatut(id, statutEnum));
     }
 
+    // ========== NOUVEAUX ENDPOINTS POUR TRANSFERT ENTRE ENTREPÔTS ==========
+
+    /**
+     * Crée une commande de transfert entre entrepôts
+     */
+    @PostMapping("/transfert")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<CommandeDTO> createCommandeTransfert(@RequestBody CommandeDTO commandeDTO) {
+        return ResponseEntity.ok(commandeService.createCommandeTransfert(commandeDTO));
+    }
+
+    /**
+     * Récupère les demandes de transfert reçues par l'entrepôt de l'utilisateur connecté
+     */
+    @GetMapping("/transfert/recues")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<CommandeDTO>> getCommandesTransfertRecues() {
+        return ResponseEntity.ok(commandeService.getCommandesTransfertRecues());
+    }
+
+    /**
+     * Accepte une demande de transfert (la commande passe en VALIDEE)
+     */
+    @PatchMapping("/transfert/{id}/accepter")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<CommandeDTO> accepterDemandeTransfert(@PathVariable Long id) {
+        return ResponseEntity.ok(commandeService.accepterDemandeTransfert(id));
+    }
+
+    /**
+     * Refuse une demande de transfert
+     */
+    @PatchMapping("/transfert/{id}/refuser")
+    @PreAuthorize("hasAnyRole('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<CommandeDTO> refuserDemandeTransfert(@PathVariable Long id) {
+        return ResponseEntity.ok(commandeService.refuserDemandeTransfert(id));
+    }
+
     // ========== MÉTHODE UTILITAIRE POUR RÉCUPÉRER LE RÔLE ==========
 
     private String getCurrentUserRole() {
@@ -133,5 +171,17 @@ public class CommandeController {
                 .findFirst()
                 .map(auth -> auth.getAuthority())
                 .orElse("");
+    }
+    @GetMapping("/transfert/source")
+    @PreAuthorize("hasAnyAuthority('RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<CommandeDTO>> getCommandesTransfertSource() {
+        return ResponseEntity.ok(commandeService.getCommandesTransfertSource());
+    }
+
+    // Dans CommandeController.java - Ajouter cette méthode
+    @GetMapping("/transfert/preparer")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<CommandeDTO>> getCommandesTransfertAPreparer() {
+        return ResponseEntity.ok(commandeService.getCommandesTransfertAPreparer());
     }
 }

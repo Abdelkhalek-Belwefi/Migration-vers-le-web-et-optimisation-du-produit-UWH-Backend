@@ -6,6 +6,7 @@ import com.example.pfe.auth.entity.Role;
 import com.example.pfe.commande.entity.Commande;
 import com.example.pfe.commande.entity.LigneCommande;
 import com.example.pfe.commande.enums.StatutCommande;
+import com.example.pfe.commande.enums.TypeCommande;
 import com.example.pfe.commande.repository.CommandeRepository;
 import com.example.pfe.expedition.dto.ExpeditionDTO;
 import com.example.pfe.expedition.entity.Expedition;
@@ -16,6 +17,7 @@ import com.example.pfe.livraison.entity.Livraison;
 import com.example.pfe.livraison.entity.LivraisonStatut;
 import com.example.pfe.livraison.repository.LivraisonRepository;
 import com.example.pfe.service.EmailService;
+import com.example.pfe.stock.service.StockService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,6 +34,7 @@ public class ExpeditionService {
     private final ExpeditionRepository expeditionRepository;
     private final CommandeRepository commandeRepository;
     private final UserRepository userRepository;
+    private final StockService stockService;
 
     @Autowired
     private LivraisonRepository livraisonRepository;
@@ -41,10 +44,12 @@ public class ExpeditionService {
 
     public ExpeditionService(ExpeditionRepository expeditionRepository,
                              CommandeRepository commandeRepository,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             StockService stockService) {
         this.expeditionRepository = expeditionRepository;
         this.commandeRepository = commandeRepository;
         this.userRepository = userRepository;
+        this.stockService = stockService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -137,7 +142,14 @@ public class ExpeditionService {
         dto.setId(expedition.getId());
         dto.setCommandeId(expedition.getCommande().getId());
         dto.setCommandeNumero(expedition.getCommande().getNumeroCommande());
-        dto.setClientNom(expedition.getCommande().getClient().getNom() + " " + expedition.getCommande().getClient().getPrenom());
+
+        // Gestion du client (peut être null pour les commandes de transfert)
+        if (expedition.getCommande().getClient() != null) {
+            dto.setClientNom(expedition.getCommande().getClient().getNom() + " " + expedition.getCommande().getClient().getPrenom());
+        } else {
+            dto.setClientNom("Transfert entre entrepôts");
+        }
+
         dto.setNumeroBL(expedition.getNumeroBL());
         dto.setStatut(expedition.getStatut());
         dto.setDateExpedition(expedition.getDateExpedition());
@@ -167,8 +179,18 @@ public class ExpeditionService {
         Commande commande = expedition.getCommande();
 
         String transporteurNom = expedition.getTransporteur() != null ? expedition.getTransporteur() : "Non spécifié";
-        String clientNom = commande.getClient().getNom() + " " + commande.getClient().getPrenom();
-        String clientAdresse = commande.getClient().getAdresse() != null ? commande.getClient().getAdresse() : "";
+
+        // Gestion du client (peut être null pour les commandes de transfert)
+        String clientNom;
+        String clientAdresse;
+
+        if (commande.getClient() != null) {
+            clientNom = commande.getClient().getNom() + " " + commande.getClient().getPrenom();
+            clientAdresse = commande.getClient().getAdresse() != null ? commande.getClient().getAdresse() : "";
+        } else {
+            clientNom = "Transfert entre entrepôts - " + commande.getEntrepotDestination().getNom();
+            clientAdresse = commande.getEntrepotDestination().getAdresse() != null ? commande.getEntrepotDestination().getAdresse() : "";
+        }
 
         String barcodeBL = BarcodeUtil.generateDataMatrixBase64(expedition.getNumeroBL(), 200, 200);
         String barcodeCommande = BarcodeUtil.generateDataMatrixBase64(commande.getNumeroCommande(), 200, 200);
@@ -199,9 +221,9 @@ public class ExpeditionService {
         html.append("<div class='separator'></div>");
 
         html.append("<table class='info-table'>");
-        html.append("<tr><th>Transporteur :</th><td>").append(transporteurNom).append("</td></tr>");
+        html.append("<tr><th>Transporteur :</th><td>").append(transporteurNom).append("</tr>");
         html.append("<tr><td colspan='2'>&nbsp;</td></tr>");
-        html.append("<tr><th>Client :</th><td>").append(clientNom).append("</td></tr>");
+        html.append("<tr><th>Destinataire :</th><td>").append(clientNom).append("</td></tr>");
         html.append("<tr><th>Adresse :</th><td>").append(clientAdresse).append("</td></tr>");
         html.append("<tr><td colspan='2'>&nbsp;</td></tr>");
         html.append("<tr><th>N° Bon de commande :</th><td>").append(commande.getNumeroCommande()).append("</td></tr>");
@@ -291,7 +313,7 @@ public class ExpeditionService {
         return convertToDTO(expeditionRepository.save(expedition));
     }
 
-    // ========== MÉTHODE CORRIGÉE ==========
+    // ========== MÉTHODE CORRIGÉE POUR TRANSFERT AVEC DIMINUTION DU STOCK ==========
 
     @Transactional
     public ExpeditionDTO expedierCommandeWithTransporteurId(Long commandeId, Long transporteurId) {
@@ -310,6 +332,26 @@ public class ExpeditionService {
             throw new RuntimeException("L'utilisateur n'a pas le rôle TRANSPORTEUR");
         }
 
+        // ========== DIMINUER LE STOCK POUR LES COMMANDES DE TRANSFERT ==========
+        if (commande.getTypeCommande() == TypeCommande.TRANSFERT) {
+            Long entrepotSourceId = commande.getEntrepotSource().getId();
+            System.out.println("📦 Diminution du stock pour transfert - Entrepôt source ID: " + entrepotSourceId);
+
+            for (LigneCommande ligne : commande.getLignes()) {
+                String lot = ligne.getArticle().getLotDefaut();
+                if (lot == null || lot.isEmpty()) {
+                    lot = "DEFAULT";
+                }
+                try {
+                    stockService.decrementStock(ligne.getArticle().getId(), ligne.getQuantite(), entrepotSourceId, lot);
+                    System.out.println("✅ Stock diminué: Article " + ligne.getArticle().getId() + ", Qté: " + ligne.getQuantite() + ", Lot: " + lot);
+                } catch (Exception e) {
+                    System.err.println("❌ Erreur lors de la diminution du stock: " + e.getMessage());
+                    throw new RuntimeException("Erreur lors de la diminution du stock: " + e.getMessage());
+                }
+            }
+        }
+
         Expedition expedition = new Expedition();
         expedition.setCommande(commande);
         expedition.setNumeroBL(generateNumeroBL());
@@ -317,7 +359,7 @@ public class ExpeditionService {
         expedition.setStatut(ExpeditionStatut.EXPEDIEE);
         expedition.setDateExpedition(LocalDateTime.now());
         expedition.setPreparePar(getCurrentUser());
-        expedition.setEntrepot(commande.getEntrepot());  // ← AJOUT
+        expedition.setEntrepot(commande.getEntrepot());
 
         Expedition saved = expeditionRepository.save(expedition);
 
@@ -333,16 +375,23 @@ public class ExpeditionService {
         livraison.setDateAssignation(LocalDateTime.now());
         livraisonRepository.save(livraison);
 
-        try {
-            String clientEmail = commande.getClient().getEmail();
-            if (clientEmail != null && !clientEmail.isEmpty()) {
-                emailService.sendOtpEmail(clientEmail, livraison.getCodeOtp(), saved.getNumeroBL());
-                System.out.println("OTP envoyé à " + clientEmail);
-            } else {
-                System.out.println("Le client n'a pas d'adresse email : " + commande.getClient().getNom());
+        // Envoi de l'email uniquement pour les commandes client (pas pour les transferts)
+        if (commande.getTypeCommande() != TypeCommande.TRANSFERT) {
+            try {
+                String clientEmail = commande.getClient().getEmail();
+                if (clientEmail != null && !clientEmail.isEmpty()) {
+                    emailService.sendOtpEmail(clientEmail, livraison.getCodeOtp(), saved.getNumeroBL());
+                    System.out.println("OTP envoyé à " + clientEmail);
+                } else {
+                    System.out.println("Le client n'a pas d'adresse email : " + commande.getClient().getNom());
+                }
+            } catch (Exception e) {
+                System.err.println("Erreur lors de l'envoi de l'email : " + e.getMessage());
             }
-        } catch (Exception e) {
-            System.err.println("Erreur lors de l'envoi de l'email : " + e.getMessage());
+        } else {
+            System.out.println("📦 Commande de transfert expédiée depuis l'entrepôt: " + commande.getEntrepotSource().getNom());
+            System.out.println("📦 Vers l'entrepôt: " + commande.getEntrepotDestination().getNom());
+            System.out.println("🔑 OTP généré: " + livraison.getCodeOtp());
         }
 
         return convertToDTO(saved);

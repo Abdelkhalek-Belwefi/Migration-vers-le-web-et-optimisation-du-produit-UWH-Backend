@@ -2,6 +2,7 @@ package com.example.pfe.commande.entity;
 
 import com.example.pfe.client.entity.Client;
 import com.example.pfe.commande.enums.StatutCommande;
+import com.example.pfe.commande.enums.TypeCommande;
 import com.example.pfe.entrepot.entity.Warehouse;
 import jakarta.persistence.*;
 import java.time.LocalDate;
@@ -21,7 +22,7 @@ public class Commande {
     private String numeroCommande;
 
     @ManyToOne
-    @JoinColumn(name = "client_id", nullable = false)
+    @JoinColumn(name = "client_id", nullable = true)  // nullable true pour transfert
     private Client client;
 
     @Column(name = "date_commande", nullable = false)
@@ -44,10 +45,23 @@ public class Commande {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT ==========
+    // ========== ENTREPÔT EXISTANT ==========
     @ManyToOne
     @JoinColumn(name = "entrepot_id", nullable = false)
     private Warehouse entrepot;
+
+    // ========== NOUVEAUX CHAMPS POUR TRANSFERT ==========
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type_commande", nullable = false)
+    private TypeCommande typeCommande = TypeCommande.CLIENT;  // Valeur par défaut
+
+    @ManyToOne
+    @JoinColumn(name = "entrepot_source_id", nullable = true)
+    private Warehouse entrepotSource;
+
+    @ManyToOne
+    @JoinColumn(name = "entrepot_destination_id", nullable = true)
+    private Warehouse entrepotDestination;
 
     public Commande() {
         this.dateCommande = LocalDateTime.now();
@@ -87,7 +101,16 @@ public class Commande {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-    // ========== NOUVEAU GETTER/SETTER ==========
     public Warehouse getEntrepot() { return entrepot; }
     public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
+
+    // Nouveaux getters et setters
+    public TypeCommande getTypeCommande() { return typeCommande; }
+    public void setTypeCommande(TypeCommande typeCommande) { this.typeCommande = typeCommande; }
+
+    public Warehouse getEntrepotSource() { return entrepotSource; }
+    public void setEntrepotSource(Warehouse entrepotSource) { this.entrepotSource = entrepotSource; }
+
+    public Warehouse getEntrepotDestination() { return entrepotDestination; }
+    public void setEntrepotDestination(Warehouse entrepotDestination) { this.entrepotDestination = entrepotDestination; }
 }

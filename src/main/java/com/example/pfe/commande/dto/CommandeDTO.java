@@ -1,6 +1,7 @@
 package com.example.pfe.commande.dto;
 
 import com.example.pfe.commande.enums.StatutCommande;
+import com.example.pfe.commande.enums.TypeCommande;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +18,9 @@ public class CommandeDTO {
     private List<LigneCommandeDTO> lignes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private TypeCommande typeCommande;  // NOUVEAU : CLIENT ou TRANSFERT
+    private Long entrepotSourceId;      // NOUVEAU : entrepôt qui envoie
+    private Long entrepotDestinationId; // NOUVEAU : entrepôt qui reçoit
 
     // Getters et setters
     public Long getId() { return id; }
@@ -51,4 +55,14 @@ public class CommandeDTO {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // Nouveaux getters et setters
+    public TypeCommande getTypeCommande() { return typeCommande; }
+    public void setTypeCommande(TypeCommande typeCommande) { this.typeCommande = typeCommande; }
+
+    public Long getEntrepotSourceId() { return entrepotSourceId; }
+    public void setEntrepotSourceId(Long entrepotSourceId) { this.entrepotSourceId = entrepotSourceId; }
+
+    public Long getEntrepotDestinationId() { return entrepotDestinationId; }
+    public void setEntrepotDestinationId(Long entrepotDestinationId) { this.entrepotDestinationId = entrepotDestinationId; }
 }

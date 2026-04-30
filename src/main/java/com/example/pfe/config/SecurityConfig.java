@@ -40,6 +40,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/ocr/extract").permitAll()
 
+                        // ===== ROUTES TRANSFERT (SÉCURISÉES) =====
+                        .requestMatchers(HttpMethod.GET, "/api/stocks/faibles").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/commandes/transfert").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.GET, "/api/commandes/transfert/recues").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/commandes/transfert/*/accepter").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/commandes/transfert/*/refuser").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+
+                        // ===== NOUVELLE ROUTE ENTREPÔT POUR RESPONSABLE =====
+                        .requestMatchers(HttpMethod.GET, "/api/admin/warehouses/public").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT")
+
                         // ===== ROUTES ADMIN =====
                         .requestMatchers("/api/admin/**").hasAuthority("ADMINISTRATEUR")
                         .requestMatchers("/api/admin/warehouses/**").hasAuthority("ADMINISTRATEUR")
@@ -101,8 +111,10 @@ public class SecurityConfig {
 
                         // ===== EXPÉDITIONS =====
                         .requestMatchers("/api/expeditions/**").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+
                         // ===== ROUTES TRANSPORTEUR =====
                         .requestMatchers("/api/transporteur/**").hasAuthority("TRANSPORTEUR")
+
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)

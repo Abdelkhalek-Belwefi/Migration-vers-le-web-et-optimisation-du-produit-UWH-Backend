@@ -52,7 +52,7 @@ public class AuthService {
         userRepository.save(user);
 
         // Générer un token quand même pour permettre la redirection vers /en-attente
-        String jwtToken = jwtService.generateToken(user.getEmail());
+        String jwtToken = jwtService.generateToken(user);
 
         AuthResponse response = new AuthResponse();
         response.setToken(jwtToken);
@@ -84,7 +84,7 @@ public class AuthService {
             throw new DisabledException("Votre compte est en attente de validation par l'administrateur");
         }
 
-        String jwtToken = jwtService.generateToken(user.getEmail());
+        String jwtToken = jwtService.generateToken(user);
 
         AuthResponse response = new AuthResponse();
         response.setToken(jwtToken);

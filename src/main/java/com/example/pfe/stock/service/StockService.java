@@ -291,6 +291,32 @@ public class StockService {
         return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
+    // ========== NOUVELLE MÉTHODE : Récupérer les stocks faibles ==========
+    public List<StockDTO> getStocksFaiblesFiltered(int seuil) {
+        Long entrepotId = getCurrentUserEntrepotId();
+        List<Stock> stocks;
+
+        if (entrepotId != null) {
+            stocks = stockRepository.findByEntrepotId(entrepotId);
+        } else {
+            stocks = stockRepository.findAll();
+        }
+
+        return stocks.stream()
+                .filter(stock -> stock.getQuantite() <= seuil)
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+    public StockDTO getStockByArticleAndEntrepot(Long articleId, Long entrepotId) {
+        List<Stock> stocks = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId);
+        if (stocks.isEmpty()) {
+            throw new RuntimeException("Aucun stock trouvé pour cet article dans l'entrepôt " + entrepotId);
+        }
+        // On prend le premier stock (généralement un seul par lot, mais on peut sommer)
+        Stock stock = stocks.get(0);
+        return convertToDTO(stock);
+    }
+
     private StockDTO convertToDTO(Stock stock) {
         StockDTO dto = new StockDTO();
         dto.setId(stock.getId());

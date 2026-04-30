@@ -2,6 +2,7 @@ package com.example.pfe.commande.repository;
 
 import com.example.pfe.commande.entity.Commande;
 import com.example.pfe.commande.enums.StatutCommande;
+import com.example.pfe.commande.enums.TypeCommande;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -48,4 +49,48 @@ public interface CommandeRepository extends JpaRepository<Commande, Long> {
      * Vérifie si une commande existe dans un entrepôt spécifique
      */
     boolean existsByIdAndEntrepotId(Long id, Long entrepotId);
+
+    // ========== NOUVELLES MÉTHODES POUR LES TRANSFERTS ENTRE ENTREPÔTS ==========
+
+    /**
+     * Récupère les commandes par type (CLIENT ou TRANSFERT)
+     */
+    List<Commande> findByTypeCommande(TypeCommande typeCommande);
+
+    /**
+     * Récupère les commandes de transfert où l'entrepôt destination est celui spécifié
+     */
+    List<Commande> findByTypeCommandeAndEntrepotDestinationId(TypeCommande typeCommande, Long entrepotDestinationId);
+
+    /**
+     * Récupère les commandes de transfert où l'entrepôt source est celui spécifié
+     */
+    List<Commande> findByTypeCommandeAndEntrepotSourceId(TypeCommande typeCommande, Long entrepotSourceId);
+
+    /**
+     * Récupère les commandes de transfert par statut et entrepôt destination
+     */
+    List<Commande> findByTypeCommandeAndStatutAndEntrepotDestinationId(TypeCommande typeCommande,
+                                                                       StatutCommande statut,
+                                                                       Long entrepotDestinationId);
+
+    /**
+     * Récupère les commandes de transfert par statut et entrepôt source
+     */
+    List<Commande> findByTypeCommandeAndStatutAndEntrepotSourceId(TypeCommande typeCommande,
+                                                                  StatutCommande statut,
+                                                                  Long entrepotSourceId);
+
+    /**
+     * Récupère toutes les commandes de transfert (filtrées par entrepôt de l'utilisateur)
+     */
+    @Query("SELECT c FROM Commande c WHERE c.typeCommande = :typeCommande AND " +
+            "(c.entrepotSource.id = :entrepotId OR c.entrepotDestination.id = :entrepotId)")
+    List<Commande> findTransfertsByEntrepot(@Param("typeCommande") TypeCommande typeCommande,
+                                            @Param("entrepotId") Long entrepotId);
+
+    // Dans CommandeRepository.java
+    List<Commande> findByTypeCommandeAndEntrepotSourceIdAndStatut(TypeCommande typeCommande,
+                                                                  Long entrepotSourceId,
+                                                                  StatutCommande statut);
 }
