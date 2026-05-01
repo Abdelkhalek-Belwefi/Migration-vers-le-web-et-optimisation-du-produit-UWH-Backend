@@ -3,6 +3,7 @@ package com.example.pfe.livraison.service;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.commande.entity.Commande;
+import com.example.pfe.commande.enums.TypeCommande;
 import com.example.pfe.expedition.entity.Expedition;
 import com.example.pfe.expedition.repository.ExpeditionRepository;
 import com.example.pfe.livraison.dto.LivraisonDTO;
@@ -207,26 +208,34 @@ public class LivraisonService {
         Commande commande = livraison.getExpedition().getCommande();
 
         // Récupérer les coordonnées du client (base ou géocodage)
-        Double clientLat = commande.getClient().getLatitude();
-        Double clientLng = commande.getClient().getLongitude();
+        Double clientLat = null;
+        Double clientLng = null;
 
-        if (clientLat == null || clientLng == null) {
-            System.out.println("🔍 Coordonnées client manquantes, géocodage...");
-            String adresseClient = commande.getClient().getAdresse();
-            if (adresseClient != null && !adresseClient.isEmpty()) {
-                Double[] coords = geocodeAddress(adresseClient);
+        // Pour les commandes client, prendre les coordonnées du client
+        if (commande.getClient() != null) {
+            clientLat = commande.getClient().getLatitude();
+            clientLng = commande.getClient().getLongitude();
+        }
+        // Pour les commandes de transfert, prendre les coordonnées de l'entrepôt destination
+        else if (commande.getTypeCommande() == TypeCommande.TRANSFERT && commande.getEntrepotDestination() != null) {
+            // Récupérer l'adresse de l'entrepôt destination pour le géocodage
+            String entrepotAdresse = commande.getEntrepotDestination().getAdresse();
+            if (entrepotAdresse != null && !entrepotAdresse.isEmpty()) {
+                System.out.println("🔍 Coordonnées entrepôt destination manquantes, géocodage...");
+                Double[] coords = geocodeAddress(entrepotAdresse);
                 if (coords != null) {
                     clientLat = coords[0];
                     clientLng = coords[1];
-                    // Sauvegarder pour la prochaine fois
-                    commande.getClient().setLatitude(clientLat);
-                    commande.getClient().setLongitude(clientLng);
                 }
             }
         }
 
         if (clientLat == null || clientLng == null) {
-            throw new RuntimeException("Impossible de localiser l'adresse du client: " + commande.getClient().getAdresse());
+            if (commande.getClient() != null) {
+                throw new RuntimeException("Impossible de localiser l'adresse du client: " + commande.getClient().getAdresse());
+            } else {
+                throw new RuntimeException("Impossible de localiser l'adresse de l'entrepôt destination");
+            }
         }
 
         double distance = distance(clientLat, clientLng, request.getLatitude(), request.getLongitude());
@@ -278,25 +287,36 @@ public class LivraisonService {
         return R * c;
     }
 
-    // ========== CONVERSION (INCHANGÉE) ==========
+    // ========== CONVERSION CORRIGÉE (GESTION DES TRANSFERTS) ==========
 
     private LivraisonDTO convertToDTO(Livraison livraison) {
         LivraisonDTO dto = new LivraisonDTO();
         dto.setId(livraison.getId());
         dto.setExpeditionId(livraison.getExpedition().getId());
         dto.setNumeroBL(livraison.getExpedition().getNumeroBL());
-        dto.setClientNom(livraison.getExpedition().getCommande().getClient().getNom() + " " +
-                livraison.getExpedition().getCommande().getClient().getPrenom());
-        dto.setAdresseLivraison(livraison.getExpedition().getCommande().getClient().getAdresse());
         dto.setTransporteurNom(livraison.getTransporteur().getNom() + " " + livraison.getTransporteur().getPrenom());
         dto.setCodeOtp(livraison.getCodeOtp());
         dto.setStatut(livraison.getStatut());
         dto.setDateAssignation(livraison.getDateAssignation());
         dto.setDateLivraison(livraison.getDateLivraison());
 
-        if (livraison.getExpedition().getCommande().getClient() != null) {
-            dto.setClientLatitude(livraison.getExpedition().getCommande().getClient().getLatitude());
-            dto.setClientLongitude(livraison.getExpedition().getCommande().getClient().getLongitude());
+        Commande commande = livraison.getExpedition().getCommande();
+
+        // Gestion du client (peut être null pour les commandes de transfert)
+        if (commande.getClient() != null) {
+            dto.setClientNom(commande.getClient().getNom() + " " + commande.getClient().getPrenom());
+            dto.setAdresseLivraison(commande.getClient().getAdresse());
+            dto.setClientLatitude(commande.getClient().getLatitude());
+            dto.setClientLongitude(commande.getClient().getLongitude());
+        }
+        // Pour les commandes de transfert, utiliser l'entrepôt destination
+        else if (commande.getTypeCommande() == TypeCommande.TRANSFERT && commande.getEntrepotDestination() != null) {
+            dto.setClientNom("Transfert entre entrepôts - " + commande.getEntrepotDestination().getNom());
+            dto.setAdresseLivraison(commande.getEntrepotDestination().getAdresse());
+            // Les coordonnées seront récupérées via géocodage dans validerLivraison si besoin
+        } else {
+            dto.setClientNom("Livraison sans client");
+            dto.setAdresseLivraison("");
         }
 
         return dto;
