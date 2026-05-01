@@ -132,18 +132,25 @@ public class StockService {
         Warehouse entrepot = warehouseRepository.findById(entrepotId)
                 .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
 
-        Stock stock = stockRepository.findByLotAndEntrepotId(lot, entrepotId)
+        // 🔹 FUSION DES LOTS : chercher un stock avec le même article, même emplacement, même entrepôt
+        // (peu importe le lot, on fusionne les quantités)
+        Stock stock = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId)
                 .stream()
-                .filter(s -> s.getArticle().getId().equals(articleId)
-                        && s.getEmplacement().equalsIgnoreCase(emplacement))
+                .filter(s -> s.getEmplacement().equalsIgnoreCase(emplacement))
                 .findFirst()
                 .orElse(null);
 
         int nouvelleQuantite;
         if (stock != null) {
+            // Fusion : on ajoute la quantité au stock existant
             nouvelleQuantite = stock.getQuantite() + quantite;
             stock.setQuantite(nouvelleQuantite);
             if (dateExpiration != null) stock.setDateExpiration(dateExpiration);
+            // Optionnel : mettre à jour le lot avec le plus récent
+            if (lot != null && !lot.isEmpty()) {
+                stock.setLot(lot);
+            }
+            System.out.println("🔄 Fusion des lots pour l'article " + articleId + " à l'emplacement " + emplacement);
         } else {
             nouvelleQuantite = quantite;
             stock = new Stock();
@@ -178,7 +185,16 @@ public class StockService {
             throw new RuntimeException("Quantité insuffisante. Disponible: " + stock.getQuantite());
         }
 
-        stock.setQuantite(stock.getQuantite() - quantite);
+        int nouvelleQuantite = stock.getQuantite() - quantite;
+        stock.setQuantite(nouvelleQuantite);
+
+        // 🔹 SI LA QUANTITÉ DEVIENT 0, ON SUPPRIME LA LIGNE DE STOCK
+        if (nouvelleQuantite == 0) {
+            System.out.println("🗑️ Suppression du stock ID " + stockId + " (quantité = 0)");
+            stockRepository.delete(stock);
+            return null;
+        }
+
         return convertToDTO(stockRepository.save(stock));
     }
 
@@ -190,31 +206,51 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
-    // ========== MÉTHODE DECREMENT STOCK CORRIGÉE ==========
+    // ========== MÉTHODE DECREMENT STOCK CORRIGÉE (avec fallback sur n'importe quel lot) ==========
 
     @Transactional
     public void decrementStock(Long articleId, int quantity, Long entrepotId, String lot) {
+        // Récupérer tous les stocks disponibles pour cet article dans l'entrepôt
         List<Stock> stocks = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId)
                 .stream()
-                .filter(s -> s.getLot().equals(lot))
+                .filter(s -> s.getQuantite() > 0)
                 .collect(Collectors.toList());
 
         if (stocks.isEmpty()) {
-            throw new RuntimeException("Aucun stock trouvé pour l'article " + articleId +
-                    " avec le lot " + lot + " dans l'entrepôt " + entrepotId);
+            throw new RuntimeException("Aucun stock disponible pour l'article " + articleId +
+                    " dans l'entrepôt " + entrepotId);
         }
 
-        Stock stock = stocks.get(0);
+        // Chercher le lot spécifique d'abord
+        Stock stock = stocks.stream()
+                .filter(s -> s.getLot().equals(lot))
+                .findFirst()
+                .orElse(null);
+
+        // Si le lot spécifique n'existe pas, prendre le premier stock disponible
+        if (stock == null) {
+            stock = stocks.get(0);
+            System.out.println("⚠️ Lot " + lot + " non trouvé, utilisation du lot " + stock.getLot());
+        }
+
         int ancienneQuantite = stock.getQuantite();
 
         if (ancienneQuantite < quantity) {
             throw new RuntimeException("Stock insuffisant pour l'article " + articleId +
-                    ". Disponible: " + ancienneQuantite);
+                    ". Disponible: " + ancienneQuantite + " (lot: " + stock.getLot() + ")");
         }
 
-        stock.setQuantite(ancienneQuantite - quantity);
+        int nouvelleQuantite = ancienneQuantite - quantity;
+        stock.setQuantite(nouvelleQuantite);
         stock.setUpdatedAt(LocalDateTime.now());
-        stockRepository.save(stock);
+
+        // 🔹 SI LA QUANTITÉ DEVIENT 0, ON SUPPRIME LA LIGNE DE STOCK
+        if (nouvelleQuantite == 0) {
+            System.out.println("🗑️ Suppression du stock (decrementStock) pour article " + articleId + ", lot " + stock.getLot());
+            stockRepository.delete(stock);
+        } else {
+            stockRepository.save(stock);
+        }
 
         User currentUser = getCurrentUser();
         if (currentUser != null) {
@@ -225,11 +261,11 @@ public class StockService {
             mouvement.setMotif("VENTE");
             mouvement.setUtilisateur(currentUser);
             mouvement.setAncienneQuantiteSource(ancienneQuantite);
-            mouvement.setNouvelleQuantiteSource(stock.getQuantite());
+            mouvement.setNouvelleQuantiteSource(nouvelleQuantite);
             mouvement.setDateMouvement(LocalDateTime.now());
             mouvementRepository.save(mouvement);
             System.out.println("📦 Mouvement de stock enregistré : sortie de " + quantity +
-                    " unités pour l'article " + articleId + " (lot: " + lot + ")");
+                    " unités pour l'article " + articleId + " (lot: " + stock.getLot() + ")");
         }
     }
 
@@ -268,7 +304,10 @@ public class StockService {
         } else {
             stocks = stockRepository.findAll();
         }
-        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+        return stocks.stream()
+                .filter(stock -> stock.getQuantite() > 0)  // 🔹 IGNORER LES STOCKS À 0
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
     public List<StockDTO> getStocksByArticleFiltered(Long articleId) {
@@ -282,13 +321,19 @@ public class StockService {
         } else {
             stocks = stockRepository.findByArticleId(articleId);
         }
-        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+        return stocks.stream()
+                .filter(stock -> stock.getQuantite() > 0)  // 🔹 IGNORER LES STOCKS À 0
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
     public List<StockDTO> searchStocksFiltered(Long articleId, String lot, String emplacement, StockStatut statut) {
         Long entrepotId = getCurrentUserEntrepotId();
         List<Stock> stocks = stockRepository.searchStocksWithEntrepot(entrepotId, articleId, lot, emplacement, statut);
-        return stocks.stream().map(this::convertToDTO).collect(Collectors.toList());
+        return stocks.stream()
+                .filter(stock -> stock.getQuantite() > 0)  // 🔹 IGNORER LES STOCKS À 0
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
     // ========== NOUVELLE MÉTHODE : Récupérer les stocks faibles ==========
@@ -303,16 +348,24 @@ public class StockService {
         }
 
         return stocks.stream()
+                .filter(stock -> stock.getQuantite() > 0)  // 🔹 IGNORER LES STOCKS À 0
                 .filter(stock -> stock.getQuantite() <= seuil)
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
+
     public StockDTO getStockByArticleAndEntrepot(Long articleId, Long entrepotId) {
         List<Stock> stocks = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId);
         if (stocks.isEmpty()) {
             throw new RuntimeException("Aucun stock trouvé pour cet article dans l'entrepôt " + entrepotId);
         }
-        // On prend le premier stock (généralement un seul par lot, mais on peut sommer)
+        // Filtrer les stocks à 0 et prendre le premier disponible
+        stocks = stocks.stream()
+                .filter(stock -> stock.getQuantite() > 0)
+                .collect(Collectors.toList());
+        if (stocks.isEmpty()) {
+            throw new RuntimeException("Aucun stock disponible (quantité > 0) pour cet article dans l'entrepôt " + entrepotId);
+        }
         Stock stock = stocks.get(0);
         return convertToDTO(stock);
     }
