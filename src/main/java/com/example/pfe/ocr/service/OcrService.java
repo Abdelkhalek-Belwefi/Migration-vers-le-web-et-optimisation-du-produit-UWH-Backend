@@ -34,7 +34,7 @@ public class OcrService {
         this.tesseract.setDatapath(tessdataPath);
         this.tesseract.setLanguage("fra+eng");
         this.tesseract.setPageSegMode(6);
-        this.tesseract.setVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:/");
+        this.tesseract.setVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/:,.");
         System.out.println("✅ Tesseract initialisé avec datapath: " + tessdataPath);
     }
 
@@ -72,45 +72,126 @@ public class OcrService {
 
         Map<String, String> result = new HashMap<>();
 
-        // ===== RECONSTRUCTION DES NUMÉROS COMPLETS (CORRIGÉ) =====
-
-        // 1. Détection du Numéro PO (cherche PO- suivi de chiffres ou tirets)
-        Pattern poPattern = Pattern.compile("PO-?([0-9\\-]+)");
-        Matcher poMatcher = poPattern.matcher(extractedText);
-        if (poMatcher.find()) {
-            result.put("numeroPO", poMatcher.group(0)); // group(0) récupère "PO-XXXX"
+        // 1. Détection du Bon de commande (CMD-XXXXXX)
+        String commande = extractCommandeNumber(extractedText);
+        if (commande != null && !commande.isEmpty()) {
+            result.put("numeroPO", commande);
+            System.out.println("✅ Bon de commande trouvé: " + commande);
         }
 
-        // 2. Détection du Bon de Livraison (cherche BL- suivi de chiffres ou tirets)
-        Pattern blPattern = Pattern.compile("BL-?([0-9\\-]+)");
-        Matcher blMatcher = blPattern.matcher(extractedText);
-        if (blMatcher.find()) {
-            result.put("bonLivraison", blMatcher.group(0)); // group(0) récupère "BL-XXXX"
+        // 2. Détection du Bon de livraison (BL-XXXXXX)
+        String bl = extractBLNumber(extractedText);
+        if (bl != null && !bl.isEmpty()) {
+            result.put("bonLivraison", bl);
+            System.out.println("✅ Bon de livraison trouvé: " + bl);
         }
 
-        // 3. Fournisseur - corriger "LOGISTIQUEEXPRESS"
-        String[] lignes = extractedText.split("\n");
-        for (String ligne : lignes) {
-            ligne = ligne.trim();
-            if (ligne.contains("LOGISTIQUE") || ligne.contains("EXPRESS") || ligne.contains("DUPONT")) {
-                String fournisseur = ligne.replaceAll("FOURNISSEUR\\s*:?\\s*", "").trim();
-                fournisseur = fournisseur.replaceAll("([A-Z])([A-Z][a-z])", "$1 $2");
-                fournisseur = fournisseur.replaceAll("([a-z])([A-Z])", "$1 $2");
-                result.put("fournisseur", fournisseur);
-                break;
-            }
+        // 3. Détection de la Date
+        String date = extractDate(extractedText);
+        if (date != null && !date.isEmpty()) {
+            result.put("dateReception", date);
+            System.out.println("✅ Date trouvée: " + date);
         }
 
-        // 4. Date
-        Pattern datePattern = Pattern.compile("(\\d{2}/\\d{2}/\\d{4})");
-        Matcher dateMatcher = datePattern.matcher(extractedText);
-        if (dateMatcher.find()) {
-            result.put("dateReception", dateMatcher.group(1));
+        // 4. Détection du Fournisseur (spécial transfert entre entrepôts)
+        String fournisseur = extractFournisseur(extractedText);
+        if (fournisseur != null && !fournisseur.isEmpty()) {
+            result.put("fournisseur", fournisseur);
+            System.out.println("✅ Fournisseur trouvé: " + fournisseur);
         }
 
-        System.out.println("=== RÉSULTAT OCR ===");
+        System.out.println("=== RÉSULTAT OCR FINAL ===");
         System.out.println(result);
         return result;
+    }
+
+    private String extractCommandeNumber(String text) {
+        Pattern pattern1 = Pattern.compile("N[°°]\\s*Bon\\s*de\\s*commande\\s*[:\\s]*([A-Z0-9\\-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher1 = pattern1.matcher(text);
+        if (matcher1.find()) {
+            return matcher1.group(1).trim();
+        }
+
+        Pattern pattern2 = Pattern.compile("(CMD-[0-9\\-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher2 = pattern2.matcher(text);
+        if (matcher2.find()) {
+            return matcher2.group(1).trim();
+        }
+
+        Pattern pattern3 = Pattern.compile("(PO-[0-9\\-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher3 = pattern3.matcher(text);
+        if (matcher3.find()) {
+            return matcher3.group(1).trim();
+        }
+
+        return null;
+    }
+
+    private String extractBLNumber(String text) {
+        Pattern pattern1 = Pattern.compile("N[°°]\\s*Bon\\s*de\\s*livraison\\s*[:\\s]*([A-Z0-9\\-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher1 = pattern1.matcher(text);
+        if (matcher1.find()) {
+            return matcher1.group(1).trim();
+        }
+
+        Pattern pattern2 = Pattern.compile("(BL-[0-9\\-]+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher2 = pattern2.matcher(text);
+        if (matcher2.find()) {
+            return matcher2.group(1).trim();
+        }
+
+        return null;
+    }
+
+    private String extractDate(String text) {
+        Pattern pattern1 = Pattern.compile("Date\\s*de\\s*livraison\\s*[:\\s]*(\\d{4}-\\d{2}-\\d{2})", Pattern.CASE_INSENSITIVE);
+        Matcher matcher1 = pattern1.matcher(text);
+        if (matcher1.find()) {
+            return matcher1.group(1);
+        }
+
+        Pattern pattern2 = Pattern.compile("Date\\s*réception\\s*[:\\s]*(\\d{2}/\\d{2}/\\d{4})", Pattern.CASE_INSENSITIVE);
+        Matcher matcher2 = pattern2.matcher(text);
+        if (matcher2.find()) {
+            return matcher2.group(1);
+        }
+
+        Pattern pattern3 = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})");
+        Matcher matcher3 = pattern3.matcher(text);
+        if (matcher3.find()) {
+            return matcher3.group(1);
+        }
+
+        Pattern pattern4 = Pattern.compile("(\\d{2}/\\d{2}/\\d{4})");
+        Matcher matcher4 = pattern4.matcher(text);
+        if (matcher4.find()) {
+            return matcher4.group(1);
+        }
+
+        return null;
+    }
+
+    private String extractFournisseur(String text) {
+        // Chercher la ligne Destinataire qui contient "Transfert entre entrepôts - Entrepot XXX"
+        Pattern destPattern = Pattern.compile("Destinataire\\s*[:\\s]*Transfert\\s*entre\\s*entrepôts\\s*-\\s*Entrepot\\s*([A-Za-z\\s]+)", Pattern.CASE_INSENSITIVE);
+        Matcher destMatcher = destPattern.matcher(text);
+        if (destMatcher.find()) {
+            String entrepotNom = destMatcher.group(1).trim();
+            // Nettoyer le nom (remplacer plusieurs espaces par un seul)
+            entrepotNom = entrepotNom.replaceAll("\\s+", " ");
+            return "Transfert entre entrepôts - Entrepot " + entrepotNom;
+        }
+
+        // Fallback: chercher "Transfert entre entrepôts" sans Destinataire
+        Pattern transfertPattern = Pattern.compile("Transfert\\s*entre\\s*entrepôts\\s*-\\s*Entrepot\\s*([A-Za-z\\s]+)", Pattern.CASE_INSENSITIVE);
+        Matcher transfertMatcher = transfertPattern.matcher(text);
+        if (transfertMatcher.find()) {
+            String entrepotNom = transfertMatcher.group(1).trim();
+            entrepotNom = entrepotNom.replaceAll("\\s+", " ");
+            return "Transfert entre entrepôts - Entrepot " + entrepotNom;
+        }
+
+        return null;
     }
 
     private String extractTextFromImage(File file) throws IOException, TesseractException {
@@ -148,6 +229,8 @@ public class OcrService {
             result.put("numeroPO", barcode);
         } else if (barcode.startsWith("BL-")) {
             result.put("bonLivraison", barcode);
+        } else if (barcode.startsWith("CMD-")) {
+            result.put("numeroPO", barcode);
         } else {
             result.put("bonLivraison", barcode);
         }

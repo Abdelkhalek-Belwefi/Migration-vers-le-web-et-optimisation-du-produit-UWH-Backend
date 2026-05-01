@@ -66,8 +66,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/articles/sync").permitAll()
 
                         // ===== STOCKS =====
+                        // 🔹 MODIFICATION : Ajout de OPERATEUR_ENTREPOT pour les lectures
                         .requestMatchers(HttpMethod.GET, "/api/stocks/**").hasAnyAuthority(
-                                "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL"
+                                "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL", "OPERATEUR_ENTREPOT"
                         )
                         .requestMatchers(HttpMethod.POST, "/api/stocks/augmenter").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.POST, "/api/stocks/diminuer").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
