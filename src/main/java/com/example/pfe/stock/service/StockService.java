@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -132,8 +133,6 @@ public class StockService {
         Warehouse entrepot = warehouseRepository.findById(entrepotId)
                 .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
 
-        // 🔹 FUSION DES LOTS : chercher un stock avec le même article, même emplacement, même entrepôt
-        // (peu importe le lot, on fusionne les quantités)
         Stock stock = stockRepository.findByArticleIdAndEntrepotId(articleId, entrepotId)
                 .stream()
                 .filter(s -> s.getEmplacement().equalsIgnoreCase(emplacement))
@@ -142,11 +141,9 @@ public class StockService {
 
         int nouvelleQuantite;
         if (stock != null) {
-            // Fusion : on ajoute la quantité au stock existant
             nouvelleQuantite = stock.getQuantite() + quantite;
             stock.setQuantite(nouvelleQuantite);
             if (dateExpiration != null) stock.setDateExpiration(dateExpiration);
-            // Optionnel : mettre à jour le lot avec le plus récent
             if (lot != null && !lot.isEmpty()) {
                 stock.setLot(lot);
             }
@@ -188,11 +185,9 @@ public class StockService {
         int nouvelleQuantite = stock.getQuantite() - quantite;
         stock.setQuantite(nouvelleQuantite);
 
-        // 🔹 SI LA QUANTITÉ DEVIENT 0, ON SUPPRIME LA LIGNE DE STOCK
+        // 🔹 ON NE SUPPRIME PLUS, ON GARDE AVEC QUANTITÉ 0 POUR L'HISTORIQUE
         if (nouvelleQuantite == 0) {
-            System.out.println("🗑️ Suppression du stock ID " + stockId + " (quantité = 0)");
-            stockRepository.delete(stock);
-            return null;
+            System.out.println("📦 Stock épuisé pour l'article " + stock.getArticle().getId() + ", lot " + stock.getLot() + " (conservé pour historique)");
         }
 
         return convertToDTO(stockRepository.save(stock));
@@ -206,7 +201,8 @@ public class StockService {
         return convertToDTO(stockRepository.save(stock));
     }
 
-    // ========== MÉTHODE DECREMENT STOCK CORRIGÉE (avec fallback sur n'importe quel lot) ==========
+    // ========== MÉTHODE DECREMENT STOCK AVEC STRATÉGIE FEFO (First Expired, First Out) ==========
+    // 🔹 MODIFIÉE : NE SUPPRIME PAS LES STOCKS À 0, LES GARDE POUR L'HISTORIQUE
 
     @Transactional
     public void decrementStock(Long articleId, int quantity, Long entrepotId, String lot) {
@@ -221,52 +217,77 @@ public class StockService {
                     " dans l'entrepôt " + entrepotId);
         }
 
-        // Chercher le lot spécifique d'abord
-        Stock stock = stocks.stream()
-                .filter(s -> s.getLot().equals(lot))
-                .findFirst()
-                .orElse(null);
+        // 🔹 TRI FEFO : Priorité aux lots qui expirent le plus tôt
+        stocks.sort((s1, s2) -> {
+            if (s1.getDateExpiration() != null && s2.getDateExpiration() != null) {
+                return s1.getDateExpiration().compareTo(s2.getDateExpiration());
+            }
+            if (s1.getDateExpiration() != null) return -1;
+            if (s2.getDateExpiration() != null) return 1;
+            if (s1.getDateReception() != null && s2.getDateReception() != null) {
+                return s1.getDateReception().compareTo(s2.getDateReception());
+            }
+            return 0;
+        });
 
-        // Si le lot spécifique n'existe pas, prendre le premier stock disponible
-        if (stock == null) {
-            stock = stocks.get(0);
-            System.out.println("⚠️ Lot " + lot + " non trouvé, utilisation du lot " + stock.getLot());
+        // 🔹 Afficher l'ordre de priorité des lots
+        System.out.println("📋 Ordre de priorité FEFO pour l'article " + articleId + " :");
+        for (int i = 0; i < stocks.size(); i++) {
+            Stock s = stocks.get(i);
+            String expiration = s.getDateExpiration() != null ? s.getDateExpiration().toLocalDate().toString() : "Sans date";
+            System.out.println("   " + (i+1) + ". Lot: " + s.getLot() + " | Qté: " + s.getQuantite() + " | Expiration: " + expiration);
         }
 
-        int ancienneQuantite = stock.getQuantite();
+        // 🔹 CALCULER LA QUANTITÉ TOTALE DISPONIBLE
+        int quantiteTotale = stocks.stream().mapToInt(Stock::getQuantite).sum();
 
-        if (ancienneQuantite < quantity) {
+        if (quantiteTotale < quantity) {
             throw new RuntimeException("Stock insuffisant pour l'article " + articleId +
-                    ". Disponible: " + ancienneQuantite + " (lot: " + stock.getLot() + ")");
+                    ". Disponible: " + quantiteTotale + " unités au total");
         }
 
-        int nouvelleQuantite = ancienneQuantite - quantity;
-        stock.setQuantite(nouvelleQuantite);
-        stock.setUpdatedAt(LocalDateTime.now());
+        // 🔹 DIMINUER EN PRIORISANT LES LOTS QUI EXPIRE LE PLUS TÔT (FEFO)
+        int remainingToDecrement = quantity;
 
-        // 🔹 SI LA QUANTITÉ DEVIENT 0, ON SUPPRIME LA LIGNE DE STOCK
-        if (nouvelleQuantite == 0) {
-            System.out.println("🗑️ Suppression du stock (decrementStock) pour article " + articleId + ", lot " + stock.getLot());
-            stockRepository.delete(stock);
-        } else {
+        for (Stock stock : stocks) {
+            if (remainingToDecrement <= 0) break;
+
+            int decrementFromThisStock = Math.min(stock.getQuantite(), remainingToDecrement);
+            int nouvelleQuantite = stock.getQuantite() - decrementFromThisStock;
+            stock.setQuantite(nouvelleQuantite);
+            stock.setUpdatedAt(LocalDateTime.now());
+
+            // Enregistrer le mouvement pour ce lot
+            User currentUser = getCurrentUser();
+            if (currentUser != null) {
+                MouvementStock mouvement = new MouvementStock();
+                mouvement.setStockSource(stock);
+                mouvement.setType("SORTIE");
+                mouvement.setQuantite(decrementFromThisStock);
+                mouvement.setMotif("VENTE");
+                mouvement.setUtilisateur(currentUser);
+                mouvement.setAncienneQuantiteSource(stock.getQuantite() + decrementFromThisStock);
+                mouvement.setNouvelleQuantiteSource(nouvelleQuantite);
+                mouvement.setDateMouvement(LocalDateTime.now());
+                mouvementRepository.save(mouvement);
+                String expiration = stock.getDateExpiration() != null ? stock.getDateExpiration().toLocalDate().toString() : "Sans date";
+                System.out.println("📦 Mouvement FEFO : sortie de " + decrementFromThisStock +
+                        " unités pour l'article " + articleId +
+                        " (lot: " + stock.getLot() +
+                        ", expiration: " + expiration + ")");
+            }
+
+            // 🔹 SAUVEGARDER LE STOCK (MÊME À 0, ON LE GARDE POUR L'HISTORIQUE)
             stockRepository.save(stock);
+
+            if (nouvelleQuantite == 0) {
+                System.out.println("📦 Stock épuisé pour l'article " + articleId + ", lot " + stock.getLot() + " (conservé pour historique)");
+            }
+
+            remainingToDecrement -= decrementFromThisStock;
         }
 
-        User currentUser = getCurrentUser();
-        if (currentUser != null) {
-            MouvementStock mouvement = new MouvementStock();
-            mouvement.setStockSource(stock);
-            mouvement.setType("SORTIE");
-            mouvement.setQuantite(quantity);
-            mouvement.setMotif("VENTE");
-            mouvement.setUtilisateur(currentUser);
-            mouvement.setAncienneQuantiteSource(ancienneQuantite);
-            mouvement.setNouvelleQuantiteSource(nouvelleQuantite);
-            mouvement.setDateMouvement(LocalDateTime.now());
-            mouvementRepository.save(mouvement);
-            System.out.println("📦 Mouvement de stock enregistré : sortie de " + quantity +
-                    " unités pour l'article " + articleId + " (lot: " + stock.getLot() + ")");
-        }
+        System.out.println("📦 Stock total diminué pour l'article " + articleId + " : " + quantity + " unités");
     }
 
     // ========== MÉTHODES AVEC FILTRE PAR ENTREPÔT ==========
@@ -359,15 +380,28 @@ public class StockService {
         if (stocks.isEmpty()) {
             throw new RuntimeException("Aucun stock trouvé pour cet article dans l'entrepôt " + entrepotId);
         }
-        // Filtrer les stocks à 0 et prendre le premier disponible
-        stocks = stocks.stream()
+
+        // Filtrer les stocks avec quantité > 0
+        List<Stock> stocksPositifs = stocks.stream()
                 .filter(stock -> stock.getQuantite() > 0)
                 .collect(Collectors.toList());
-        if (stocks.isEmpty()) {
+
+        if (stocksPositifs.isEmpty()) {
             throw new RuntimeException("Aucun stock disponible (quantité > 0) pour cet article dans l'entrepôt " + entrepotId);
         }
-        Stock stock = stocks.get(0);
-        return convertToDTO(stock);
+
+        int quantiteTotale = stocksPositifs.stream()
+                .mapToInt(Stock::getQuantite)
+                .sum();
+
+        Stock premierStock = stocksPositifs.get(0);
+
+        StockDTO dto = convertToDTO(premierStock);
+        dto.setQuantite(quantiteTotale);
+
+        System.out.println("📊 Stock total pour article " + articleId + " dans entrepôt " + entrepotId + " : " + quantiteTotale + " unités (sur " + stocksPositifs.size() + " lots)");
+
+        return dto;
     }
 
     private StockDTO convertToDTO(Stock stock) {

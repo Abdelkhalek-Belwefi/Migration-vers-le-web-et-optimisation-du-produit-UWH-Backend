@@ -39,4 +39,11 @@ public class TransporteurController {
             @RequestBody ValidationLivraisonRequest request) {
         return ResponseEntity.ok(livraisonService.validerLivraison(livraisonId, request));
     }
+
+    // ========== NOUVEAU ENDPOINT POUR LIVRAISONS EN ATTENTE (ENTREPÔT DEMANDEUR) ==========
+    @GetMapping("/livraisons/entrepot/attente")
+    @PreAuthorize("hasAnyAuthority('OPERATEUR_ENTREPOT', 'RESPONSABLE_ENTREPOT', 'ADMINISTRATEUR')")
+    public ResponseEntity<List<LivraisonDTO>> getLivraisonsEnAttentePourEntrepot() {
+        return ResponseEntity.ok(livraisonService.getLivraisonsEnAttentePourEntrepot());
+    }
 }

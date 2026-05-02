@@ -29,7 +29,7 @@ public class Article {
     private String lotDefaut;
     private Integer dureeExpirationJours;
     private boolean actif = true;
-    private Double prixUnitaire;   // champ ajouté
+    private Double prixUnitaire;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -37,9 +37,9 @@ public class Article {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ========== NOUVEAU : AJOUT DE L'ENTREPÔT (CENTRAL) ==========
+    // ========== ENTREPÔT (OPTIONNEL - NULLABLE) ==========
     @ManyToOne
-    @JoinColumn(name = "entrepot_id", nullable = false)
+    @JoinColumn(name = "entrepot_id", nullable = true)
     private Warehouse entrepot;
 
     public Article() {
@@ -99,7 +99,7 @@ public class Article {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-    // ========== NOUVEAU GETTER/SETTER ==========
+    // Getter et setter pour entrepot
     public Warehouse getEntrepot() { return entrepot; }
     public void setEntrepot(Warehouse entrepot) { this.entrepot = entrepot; }
 

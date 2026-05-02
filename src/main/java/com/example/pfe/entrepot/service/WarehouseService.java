@@ -65,6 +65,8 @@ public class WarehouseService {
         warehouse.setTelephone(dto.getTelephone());
         warehouse.setEmail(dto.getEmail());
         warehouse.setActif(dto.isActif());
+        warehouse.setLatitude(dto.getLatitude());
+        warehouse.setLongitude(dto.getLongitude());
     }
 
     private WarehouseDTO convertToDTO(Warehouse warehouse) {
@@ -81,6 +83,8 @@ public class WarehouseService {
         dto.setActif(warehouse.isActif());
         dto.setCreatedAt(warehouse.getCreatedAt());
         dto.setUpdatedAt(warehouse.getUpdatedAt());
+        dto.setLatitude(warehouse.getLatitude());
+        dto.setLongitude(warehouse.getLongitude());
         return dto;
     }
 }

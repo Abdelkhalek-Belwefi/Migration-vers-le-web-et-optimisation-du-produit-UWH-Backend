@@ -30,6 +30,12 @@ public class Warehouse {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -66,4 +72,10 @@ public class Warehouse {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // Nouveaux getters et setters
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
 }

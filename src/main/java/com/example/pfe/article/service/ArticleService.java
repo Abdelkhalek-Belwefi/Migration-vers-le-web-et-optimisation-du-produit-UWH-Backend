@@ -57,7 +57,7 @@ public class ArticleService {
         return new ArticleDTO(article);
     }
 
-    // ========== MÉTHODE CREATE ARTICLE CORRIGÉE ==========
+    // ========== MÉTHODE CREATE ARTICLE CORRIGÉE (SANS ENTREPÔT OBLIGATOIRE) ==========
 
     @Transactional
     public ArticleDTO createArticle(ArticleDTO dto) {
@@ -65,20 +65,6 @@ public class ArticleService {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             throw new RuntimeException("Utilisateur non connecté");
-        }
-
-        // Déterminer l'entrepôt
-        Warehouse entrepot;
-        if (currentUser.getRole() == Role.ADMINISTRATEUR) {
-            // Admin : utiliser l'entrepôt central (id=1)
-            entrepot = warehouseRepository.findById(1L)
-                    .orElseThrow(() -> new RuntimeException("Entrepôt central non trouvé"));
-            System.out.println("✅ Admin : création d'article dans l'entrepôt central (id=1)");
-        } else if (currentUser.getEntrepot() != null) {
-            // Utilisateur avec entrepôt assigné
-            entrepot = currentUser.getEntrepot();
-        } else {
-            throw new RuntimeException("Impossible de créer un article : utilisateur non lié à un entrepôt");
         }
 
         Article article = new Article();
@@ -95,9 +81,10 @@ public class ArticleService {
         article.setDureeExpirationJours(dto.getDureeExpirationJours());
         article.setActif(dto.isActif());
         article.setPrixUnitaire(dto.getPrixUnitaire());
-        article.setEntrepot(entrepot);
+        // L'entrepôt n'est plus assigné à l'article (nullable)
 
         Article saved = articleRepository.save(article);
+        System.out.println("✅ Article créé avec succès (sans association d'entrepôt)");
         return new ArticleDTO(saved);
     }
 
@@ -105,7 +92,6 @@ public class ArticleService {
     public ArticleDTO updateArticle(Long id, ArticleDTO dto) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
-        // Ne pas modifier le code (identifiant unique)
         article.setCodeArticleERP(dto.getCodeArticleERP());
         article.setGtin(dto.getGtin());
         article.setNumSerie(dto.getNumSerie());

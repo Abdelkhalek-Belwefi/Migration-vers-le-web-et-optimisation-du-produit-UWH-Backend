@@ -127,6 +127,43 @@ public class LivraisonService {
                 .collect(Collectors.toList());
     }
 
+    // ========== NOUVELLE MÉTHODE : Récupérer les livraisons en attente pour l'entrepôt demandeur ==========
+    public List<LivraisonDTO> getLivraisonsEnAttentePourEntrepot() {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("Utilisateur non connecté");
+        }
+
+        Long entrepotId = getCurrentUserEntrepotId();
+        if (entrepotId == null) {
+            throw new RuntimeException("Utilisateur non lié à un entrepôt");
+        }
+
+        System.out.println("🔍 Recherche livraisons pour entrepôt demandeur ID: " + entrepotId);
+
+        // Récupérer toutes les livraisons avec statut ASSIGNEE ou EN_COURS
+        List<LivraisonStatut> statuts = List.of(LivraisonStatut.ASSIGNEE, LivraisonStatut.EN_COURS);
+        List<Livraison> allLivraisons = livraisonRepository.findAll();
+
+        // Filtrer les livraisons où l'entrepôt DESTINATION (celui qui reçoit) correspond à l'entrepôt de l'utilisateur
+        List<Livraison> livraisonsFiltrees = allLivraisons.stream()
+                .filter(l -> statuts.contains(l.getStatut()))
+                .filter(l -> {
+                    Commande commande = l.getExpedition().getCommande();
+                    if (commande.getTypeCommande() == TypeCommande.TRANSFERT && commande.getEntrepotDestination() != null) {
+                        return commande.getEntrepotDestination().getId().equals(entrepotId);
+                    }
+                    return false;
+                })
+                .collect(Collectors.toList());
+
+        System.out.println("📋 Livraisons en attente trouvées: " + livraisonsFiltrees.size());
+
+        return livraisonsFiltrees.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
     // ========== GÉOCODAGE NOMINATIM AMÉLIORÉ ==========
     private Double[] geocodeAddress(String address) {
         if (address == null || address.trim().isEmpty()) return null;
@@ -266,6 +303,28 @@ public class LivraisonService {
                     .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         }
         throw new RuntimeException("Non authentifié");
+    }
+
+    private User getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof UserDetails) {
+            String email = ((UserDetails) principal).getUsername();
+            return userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé avec l'email: " + email));
+        }
+        return null;
+    }
+
+    private Long getCurrentUserEntrepotId() {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                return currentUser.getEntrepot().getId();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur récupération entrepôt utilisateur: " + e.getMessage());
+        }
+        return null;
     }
 
     private String generateOtp() {

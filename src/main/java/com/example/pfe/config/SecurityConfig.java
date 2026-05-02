@@ -66,7 +66,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/articles/sync").permitAll()
 
                         // ===== STOCKS =====
-                        // 🔹 MODIFICATION : Ajout de OPERATEUR_ENTREPOT pour les lectures
                         .requestMatchers(HttpMethod.GET, "/api/stocks/**").hasAnyAuthority(
                                 "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR", "SERVICE_COMMERCIAL", "OPERATEUR_ENTREPOT"
                         )
@@ -112,6 +111,9 @@ public class SecurityConfig {
 
                         // ===== EXPÉDITIONS =====
                         .requestMatchers("/api/expeditions/**").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+
+                        // ===== NOUVELLE ROUTE POUR LIVRAISONS EN ATTENTE (doit être AVANT la règle transporteur) =====
+                        .requestMatchers(HttpMethod.GET, "/api/transporteur/livraisons/entrepot/attente").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
 
                         // ===== ROUTES TRANSPORTEUR =====
                         .requestMatchers("/api/transporteur/**").hasAuthority("TRANSPORTEUR")
