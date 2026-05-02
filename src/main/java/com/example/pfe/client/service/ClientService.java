@@ -15,11 +15,11 @@ import java.util.stream.Collectors;
 public class ClientService {
 
     private final ClientRepository clientRepository;
-    private final GeocodingService geocodingService;   // ← AJOUT
+    private final GeocodingService geocodingService;
 
     public ClientService(ClientRepository clientRepository, GeocodingService geocodingService) {
         this.clientRepository = clientRepository;
-        this.geocodingService = geocodingService;     // ← AJOUT
+        this.geocodingService = geocodingService;
     }
 
     public List<ClientDTO> getAllClients() {
@@ -48,9 +48,8 @@ public class ClientService {
         client.setVille(dto.getVille());
         client.setCodePostal(dto.getCodePostal());
         client.setPays(dto.getPays());
-
-        // ========== AJOUT : Géocoder l'adresse ==========
-        updateClientCoordinates(client);
+        client.setLatitude(dto.getLatitude());
+        client.setLongitude(dto.getLongitude());
 
         return convertToDTO(clientRepository.save(client));
     }
@@ -68,9 +67,8 @@ public class ClientService {
         client.setCodePostal(dto.getCodePostal());
         client.setPays(dto.getPays());
         client.setUpdatedAt(LocalDateTime.now());
-
-        // ========== AJOUT : Géocoder l'adresse ==========
-        updateClientCoordinates(client);
+        client.setLatitude(dto.getLatitude());
+        client.setLongitude(dto.getLongitude());
 
         return convertToDTO(clientRepository.save(client));
     }
@@ -93,34 +91,29 @@ public class ClientService {
         dto.setPays(client.getPays());
         dto.setCreatedAt(client.getCreatedAt());
         dto.setUpdatedAt(client.getUpdatedAt());
-        // Ajout des coordonnées dans le DTO (si vous les avez ajoutées dans ClientDTO)
-        // dto.setLatitude(client.getLatitude());
-        // dto.setLongitude(client.getLongitude());
+        dto.setLatitude(client.getLatitude());
+        dto.setLongitude(client.getLongitude());
         return dto;
     }
 
-    // ========== MÉTHODES AJOUTÉES POUR LE GÉOCODAGE ==========
-
-    /**
-     * Met à jour les coordonnées GPS du client à partir de son adresse.
-     */
-    private void updateClientCoordinates(Client client) {
-        String fullAddress = buildFullAddress(client);
-        if (fullAddress != null && !fullAddress.trim().isEmpty()) {
-            Double[] coords = geocodingService.geocodeAddress(fullAddress);
-            if (coords != null) {
-                client.setLatitude(coords[0]);
-                client.setLongitude(coords[1]);
-                System.out.println("Géocodage réussi pour : " + fullAddress + " -> " + coords[0] + ", " + coords[1]);
-            } else {
-                System.out.println("Impossible de géocoder l'adresse : " + fullAddress);
+    @Transactional
+    public void updateAllClientsCoordinates() {
+        List<Client> clients = clientRepository.findAll();
+        for (Client client : clients) {
+            String fullAddress = buildFullAddress(client);
+            if (fullAddress != null && !fullAddress.trim().isEmpty()) {
+                Double[] coords = geocodingService.geocodeAddress(fullAddress);
+                if (coords != null) {
+                    client.setLatitude(coords[0]);
+                    client.setLongitude(coords[1]);
+                    clientRepository.save(client);
+                    System.out.println("Géocodage réussi pour : " + fullAddress);
+                }
+                try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             }
         }
     }
 
-    /**
-     * Construit une adresse complète à partir des champs du client.
-     */
     private String buildFullAddress(Client client) {
         StringBuilder sb = new StringBuilder();
         if (client.getAdresse() != null && !client.getAdresse().isEmpty()) {
@@ -139,14 +132,5 @@ public class ClientService {
             sb.append(client.getPays());
         }
         return sb.toString();
-    }
-    @Transactional
-    public void updateAllClientsCoordinates() {
-        List<Client> clients = clientRepository.findAll();
-        for (Client client : clients) {
-            updateClientCoordinates(client);
-            clientRepository.save(client);
-            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
     }
 }
