@@ -15,4 +15,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // NOUVEAU
     List<User> findByRole(Role role);
+
+    // 🔔 NOUVEAU : Récupérer les utilisateurs par entrepôt
+    List<User> findByEntrepotId(Long entrepotId);
 }

@@ -2,6 +2,7 @@ package com.example.pfe.commande.service;
 
 import com.example.pfe.article.entity.Article;
 import com.example.pfe.article.repository.ArticleRepository;
+import com.example.pfe.auth.entity.Role;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.client.entity.Client;
@@ -16,6 +17,8 @@ import com.example.pfe.commande.repository.CommandeRepository;
 import com.example.pfe.commande.repository.LigneCommandeRepository;
 import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.example.pfe.picking.service.PickingService;
 import com.example.pfe.stock.service.StockService;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,6 +41,7 @@ public class CommandeService {
     private final StockService stockService;
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
+    private final NotificationService notificationService;
 
     public CommandeService(CommandeRepository commandeRepository,
                            LigneCommandeRepository ligneCommandeRepository,
@@ -46,7 +50,8 @@ public class CommandeService {
                            PickingService pickingService,
                            StockService stockService,
                            UserRepository userRepository,
-                           WarehouseRepository warehouseRepository) {
+                           WarehouseRepository warehouseRepository,
+                           NotificationService notificationService) {
         this.commandeRepository = commandeRepository;
         this.ligneCommandeRepository = ligneCommandeRepository;
         this.clientRepository = clientRepository;
@@ -55,6 +60,7 @@ public class CommandeService {
         this.stockService = stockService;
         this.userRepository = userRepository;
         this.warehouseRepository = warehouseRepository;
+        this.notificationService = notificationService;
     }
 
     public List<CommandeDTO> getAllCommandes() {
@@ -122,6 +128,25 @@ public class CommandeService {
             }
             commandeRepository.save(savedCommande);
         }
+
+        // 🔔 NOTIFICATION : Nouvelle commande client créée (pour les responsables entrepôt)
+        try {
+            userRepository.findByRole(Role.RESPONSABLE_ENTREPOT).forEach(responsable -> {
+                notificationService.createNotification(
+                        responsable.getId(),
+                        "🛒 Nouvelle commande client",
+                        String.format("Nouvelle commande N°%s créée par %s %s",
+                                savedCommande.getNumeroCommande(), client.getPrenom(), client.getNom()),
+                        NotificationType.INFO,
+                        "/dashboard?tab=preparation",
+                        savedCommande.getId(),
+                        "COMMANDE"
+                );
+            });
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(savedCommande);
     }
 
@@ -190,6 +215,24 @@ public class CommandeService {
                 }
                 System.out.println("📦 Stock diminué pour la commande client " + commande.getNumeroCommande());
                 commande.setStatut(statut);
+
+                // 🔔 NOTIFICATION : Commande client validée (pour le commercial)
+                try {
+                    userRepository.findByRole(Role.SERVICE_COMMERCIAL).forEach(commercial -> {
+                        notificationService.createNotification(
+                                commercial.getId(),
+                                "✅ Commande validée",
+                                String.format("La commande N°%s a été validée et est prête à être préparée.",
+                                        commande.getNumeroCommande()),
+                                NotificationType.SUCCES,
+                                "/dashboard?tab=commandes",
+                                commande.getId(),
+                                "COMMANDE"
+                        );
+                    });
+                } catch (Exception e) {
+                    System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+                }
             } else {
                 commande.setStatut(statut);
             }
@@ -384,6 +427,27 @@ public class CommandeService {
             }
             commandeRepository.save(savedCommande);
         }
+
+        // 🔔 NOTIFICATION : Nouvelle demande de transfert (pour le responsable de l'entrepôt source)
+        try {
+            userRepository.findByEntrepotId(entrepotSource.getId()).forEach(responsable -> {
+                if (responsable.getRole() == Role.RESPONSABLE_ENTREPOT || responsable.getRole() == Role.ADMINISTRATEUR) {
+                    notificationService.createNotification(
+                            responsable.getId(),
+                            "📤 Nouvelle demande de transfert",
+                            String.format("L'entrepôt %s demande un transfert d'articles. Voir détails dans 'Demandes reçues'.",
+                                    entrepotDestination.getNom()),
+                            NotificationType.INFO,
+                            "/dashboard?tab=demandesRecues",
+                            savedCommande.getId(),
+                            "TRANSFERT"
+                    );
+                }
+            });
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(savedCommande);
     }
 
@@ -421,6 +485,26 @@ public class CommandeService {
 
         System.out.println("✅ Demande de transfert acceptée, passage en EN_PREPARATION");
 
+        // 🔔 NOTIFICATION : Demande acceptée (pour le responsable de l'entrepôt demandeur)
+        try {
+            userRepository.findByEntrepotId(commande.getEntrepotDestination().getId()).forEach(demandeur -> {
+                if (demandeur.getRole() == Role.RESPONSABLE_ENTREPOT || demandeur.getRole() == Role.ADMINISTRATEUR) {
+                    notificationService.createNotification(
+                            demandeur.getId(),
+                            "✅ Demande de transfert acceptée",
+                            String.format("Votre demande de transfert a été acceptée par l'entrepôt %s. Préparation en cours.",
+                                    commande.getEntrepotSource().getNom()),
+                            NotificationType.SUCCES,
+                            "/dashboard?tab=transfert",
+                            commande.getId(),
+                            "TRANSFERT"
+                    );
+                }
+            });
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(commandeRepository.save(commande));
     }
 
@@ -439,6 +523,26 @@ public class CommandeService {
 
         commande.setStatut(StatutCommande.ANNULEE);
         commande.setUpdatedAt(LocalDateTime.now());
+
+        // 🔔 NOTIFICATION : Demande refusée (pour le responsable de l'entrepôt demandeur)
+        try {
+            userRepository.findByEntrepotId(commande.getEntrepotDestination().getId()).forEach(demandeur -> {
+                if (demandeur.getRole() == Role.RESPONSABLE_ENTREPOT || demandeur.getRole() == Role.ADMINISTRATEUR) {
+                    notificationService.createNotification(
+                            demandeur.getId(),
+                            "❌ Demande de transfert refusée",
+                            String.format("Votre demande de transfert a été refusée par l'entrepôt %s.",
+                                    commande.getEntrepotSource().getNom()),
+                            NotificationType.ERREUR,
+                            "/dashboard?tab=transfert",
+                            commande.getId(),
+                            "TRANSFERT"
+                    );
+                }
+            });
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
 
         return convertToDTO(commandeRepository.save(commande));
     }

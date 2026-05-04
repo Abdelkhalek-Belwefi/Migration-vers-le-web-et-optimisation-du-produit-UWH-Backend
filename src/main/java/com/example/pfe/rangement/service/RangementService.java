@@ -2,6 +2,8 @@ package com.example.pfe.rangement.service;
 
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.example.pfe.reception.dto.PutawayTaskDTO;
 import com.example.pfe.reception.entity.PutawayTask;
 import com.example.pfe.reception.repository.PutawayTaskRepository;
@@ -18,12 +20,15 @@ import java.util.stream.Collectors;
 public class RangementService {
 
     private final PutawayTaskRepository taskRepository;
-    private final UserRepository userRepository;  // ← NOUVEAU
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public RangementService(PutawayTaskRepository taskRepository,
-                            UserRepository userRepository) {  // ← NOUVEAU
+                            UserRepository userRepository,
+                            NotificationService notificationService) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -53,7 +58,36 @@ public class RangementService {
         }
         task.setStatut("EN_COURS");
         task.setCompletedAt(null);
-        return convertToDTO(taskRepository.save(task));
+        PutawayTaskDTO result = convertToDTO(taskRepository.save(task));
+
+        // 🔔 NOTIFICATION : Tâche de rangement commencée (pour le responsable entrepôt)
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(currentUser.getEntrepot().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "🔄 Tâche de rangement commencée",
+                                String.format("L'opérateur %s %s a commencé le rangement de l'article %s (lot: %s)",
+                                        currentUser.getPrenom(), currentUser.getNom(),
+                                        task.getArticle().getDesignation(),
+                                        task.getLot() != null ? task.getLot() : "N/A"),
+                                NotificationType.INFO,
+                                "/dashboard?tab=rangement",
+                                task.getId(),
+                                "RANGEMENT"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        return result;
     }
 
     @Transactional
@@ -68,7 +102,36 @@ public class RangementService {
         if (emplacementReel != null && !emplacementReel.isEmpty()) {
             task.setEmplacementDestination(emplacementReel);
         }
-        return convertToDTO(taskRepository.save(task));
+        PutawayTaskDTO result = convertToDTO(taskRepository.save(task));
+
+        // 🔔 NOTIFICATION : Tâche de rangement terminée (pour le responsable entrepôt)
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(currentUser.getEntrepot().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "✅ Tâche de rangement terminée",
+                                String.format("L'opérateur %s %s a terminé le rangement de l'article %s à l'emplacement %s",
+                                        currentUser.getPrenom(), currentUser.getNom(),
+                                        task.getArticle().getDesignation(),
+                                        emplacementReel != null ? emplacementReel : task.getEmplacementDestination()),
+                                NotificationType.SUCCES,
+                                "/dashboard?tab=rangement",
+                                task.getId(),
+                                "RANGEMENT"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        return result;
     }
 
     private PutawayTaskDTO convertToDTO(PutawayTask task) {

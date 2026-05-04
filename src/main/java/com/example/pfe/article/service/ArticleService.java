@@ -8,6 +8,8 @@ import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -22,13 +24,16 @@ public class ArticleService {
     private final ArticleRepository articleRepository;
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
+    private final NotificationService notificationService;
 
     public ArticleService(ArticleRepository articleRepository,
                           UserRepository userRepository,
-                          WarehouseRepository warehouseRepository) {
+                          WarehouseRepository warehouseRepository,
+                          NotificationService notificationService) {
         this.articleRepository = articleRepository;
         this.userRepository = userRepository;
         this.warehouseRepository = warehouseRepository;
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -85,6 +90,26 @@ public class ArticleService {
 
         Article saved = articleRepository.save(article);
         System.out.println("✅ Article créé avec succès (sans association d'entrepôt)");
+
+        // 🔔 NOTIFICATION : Nouvel article créé (pour tous les responsables entrepôt)
+        try {
+            List<User> responsables = userRepository.findByRole(Role.RESPONSABLE_ENTREPOT);
+            for (User responsable : responsables) {
+                notificationService.createNotification(
+                        responsable.getId(),
+                        "📝 Nouvel article créé",
+                        String.format("Un nouvel article a été créé : %s (Code: %s)",
+                                saved.getDesignation(), saved.getCodeArticleERP()),
+                        NotificationType.INFO,
+                        "/dashboard?tab=articles",
+                        saved.getId(),
+                        "ARTICLE"
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return new ArticleDTO(saved);
     }
 
@@ -92,6 +117,9 @@ public class ArticleService {
     public ArticleDTO updateArticle(Long id, ArticleDTO dto) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
+
+        String ancienneDesignation = article.getDesignation();
+
         article.setCodeArticleERP(dto.getCodeArticleERP());
         article.setGtin(dto.getGtin());
         article.setNumSerie(dto.getNumSerie());
@@ -107,12 +135,54 @@ public class ArticleService {
         article.setPrixUnitaire(dto.getPrixUnitaire());
         article.setUpdatedAt(java.time.LocalDateTime.now());
         Article updated = articleRepository.save(article);
+
+        // 🔔 NOTIFICATION : Article modifié (pour tous les responsables entrepôt)
+        try {
+            List<User> responsables = userRepository.findByRole(Role.RESPONSABLE_ENTREPOT);
+            for (User responsable : responsables) {
+                notificationService.createNotification(
+                        responsable.getId(),
+                        "✏️ Article modifié",
+                        String.format("L'article '%s' a été modifié. Nouvelle désignation: %s",
+                                ancienneDesignation, updated.getDesignation()),
+                        NotificationType.INFO,
+                        "/dashboard?tab=articles",
+                        updated.getId(),
+                        "ARTICLE"
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return new ArticleDTO(updated);
     }
 
     @Transactional
     public void deleteArticle(Long id) {
+        Article article = articleRepository.findById(id).orElse(null);
         articleRepository.deleteById(id);
+
+        // 🔔 NOTIFICATION : Article supprimé (pour tous les responsables entrepôt)
+        if (article != null) {
+            try {
+                List<User> responsables = userRepository.findByRole(Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    notificationService.createNotification(
+                            responsable.getId(),
+                            "🗑️ Article supprimé",
+                            String.format("L'article '%s' (Code: %s) a été supprimé du catalogue.",
+                                    article.getDesignation(), article.getCodeArticleERP()),
+                            NotificationType.ERREUR,
+                            "/dashboard?tab=articles",
+                            id,
+                            "ARTICLE"
+                    );
+                }
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+            }
+        }
     }
 
     @Transactional
@@ -121,7 +191,28 @@ public class ArticleService {
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
         article.setActif(true);
         article.setUpdatedAt(java.time.LocalDateTime.now());
-        return new ArticleDTO(articleRepository.save(article));
+        Article updated = articleRepository.save(article);
+
+        // 🔔 NOTIFICATION : Article activé
+        try {
+            List<User> responsables = userRepository.findByRole(Role.RESPONSABLE_ENTREPOT);
+            for (User responsable : responsables) {
+                notificationService.createNotification(
+                        responsable.getId(),
+                        "🟢 Article activé",
+                        String.format("L'article '%s' a été réactivé et est de nouveau disponible.",
+                                updated.getDesignation()),
+                        NotificationType.SUCCES,
+                        "/dashboard?tab=articles",
+                        updated.getId(),
+                        "ARTICLE"
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        return new ArticleDTO(updated);
     }
 
     @Transactional
@@ -130,7 +221,28 @@ public class ArticleService {
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
         article.setActif(false);
         article.setUpdatedAt(java.time.LocalDateTime.now());
-        return new ArticleDTO(articleRepository.save(article));
+        Article updated = articleRepository.save(article);
+
+        // 🔔 NOTIFICATION : Article désactivé
+        try {
+            List<User> responsables = userRepository.findByRole(Role.RESPONSABLE_ENTREPOT);
+            for (User responsable : responsables) {
+                notificationService.createNotification(
+                        responsable.getId(),
+                        "🔴 Article désactivé",
+                        String.format("L'article '%s' a été désactivé et n'est plus disponible à la vente.",
+                                updated.getDesignation()),
+                        NotificationType.ALERTE,
+                        "/dashboard?tab=articles",
+                        updated.getId(),
+                        "ARTICLE"
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        return new ArticleDTO(updated);
     }
 
     // ========== MÉTHODE UTILITAIRE ==========

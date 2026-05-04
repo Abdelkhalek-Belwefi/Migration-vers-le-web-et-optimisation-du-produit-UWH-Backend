@@ -3,6 +3,8 @@ package com.example.pfe.entrepot.service;
 import com.example.pfe.entrepot.dto.WarehouseDTO;
 import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,9 +15,12 @@ import java.util.stream.Collectors;
 public class WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
+    private final NotificationService notificationService;
 
-    public WarehouseService(WarehouseRepository warehouseRepository) {
+    public WarehouseService(WarehouseRepository warehouseRepository,
+                            NotificationService notificationService) {
         this.warehouseRepository = warehouseRepository;
+        this.notificationService = notificationService;
     }
 
     public List<WarehouseDTO> getAllWarehouses() {
@@ -35,6 +40,23 @@ public class WarehouseService {
         Warehouse warehouse = new Warehouse();
         updateEntityFromDTO(warehouse, dto);
         warehouse = warehouseRepository.save(warehouse);
+
+        // 🔔 NOTIFICATION : Nouvel entrepôt créé (pour tous les administrateurs)
+        try {
+            notificationService.createNotification(
+                    1L, // ID de l'administrateur principal (ou parcourir tous)
+                    "🏭 Nouvel entrepôt créé",
+                    String.format("Un nouvel entrepôt a été créé : %s à %s",
+                            warehouse.getNom(), warehouse.getVille()),
+                    NotificationType.INFO,
+                    "/admin?tab=entrepots",
+                    warehouse.getId(),
+                    "WAREHOUSE"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(warehouse);
     }
 
@@ -42,8 +64,28 @@ public class WarehouseService {
     public WarehouseDTO updateWarehouse(Long id, WarehouseDTO dto) {
         Warehouse warehouse = warehouseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Entrepôt non trouvé"));
+
+        String ancienNom = warehouse.getNom();
+
         updateEntityFromDTO(warehouse, dto);
         warehouse = warehouseRepository.save(warehouse);
+
+        // 🔔 NOTIFICATION : Entrepôt modifié (pour tous les administrateurs)
+        try {
+            notificationService.createNotification(
+                    1L,
+                    "✏️ Entrepôt modifié",
+                    String.format("L'entrepôt '%s' a été modifié. Nouveau nom: %s",
+                            ancienNom, warehouse.getNom()),
+                    NotificationType.INFO,
+                    "/admin?tab=entrepots",
+                    warehouse.getId(),
+                    "WAREHOUSE"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(warehouse);
     }
 
@@ -52,7 +94,27 @@ public class WarehouseService {
         if (!warehouseRepository.existsById(id)) {
             throw new RuntimeException("Entrepôt non trouvé");
         }
+
+        Warehouse warehouse = warehouseRepository.findById(id).orElse(null);
         warehouseRepository.deleteById(id);
+
+        // 🔔 NOTIFICATION : Entrepôt supprimé (pour tous les administrateurs)
+        if (warehouse != null) {
+            try {
+                notificationService.createNotification(
+                        1L,
+                        "🏭 Entrepôt supprimé",
+                        String.format("L'entrepôt '%s' a été supprimé du système.",
+                                warehouse.getNom()),
+                        NotificationType.ERREUR,
+                        "/admin?tab=entrepots",
+                        id,
+                        "WAREHOUSE"
+                );
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+            }
+        }
     }
 
     private void updateEntityFromDTO(Warehouse warehouse, WarehouseDTO dto) {

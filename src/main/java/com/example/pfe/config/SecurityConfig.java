@@ -40,6 +40,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/ocr/extract").permitAll()
 
+                        // ===== WEBSOCKET POUR NOTIFICATIONS =====
+                        .requestMatchers("/ws-notifications/**").permitAll()
+
                         // ===== ROUTES TRANSFERT (SÉCURISÉES) =====
                         .requestMatchers(HttpMethod.GET, "/api/stocks/faibles").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.POST, "/api/commandes/transfert").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
@@ -114,6 +117,9 @@ public class SecurityConfig {
 
                         // ===== NOUVELLE ROUTE POUR LIVRAISONS EN ATTENTE (doit être AVANT la règle transporteur) =====
                         .requestMatchers(HttpMethod.GET, "/api/transporteur/livraisons/entrepot/attente").hasAnyAuthority("OPERATEUR_ENTREPOT", "RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
+
+                        // ===== NOTIFICATIONS API =====
+                        .requestMatchers("/api/notifications/**").hasAnyAuthority("ADMINISTRATEUR", "RESPONSABLE_ENTREPOT", "OPERATEUR_ENTREPOT", "TRANSPORTEUR", "SERVICE_COMMERCIAL")
 
                         // ===== ROUTES TRANSPORTEUR =====
                         .requestMatchers("/api/transporteur/**").hasAuthority("TRANSPORTEUR")

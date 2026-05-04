@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-public class NotificationService {
+public class StockNotificationService {  // ← Renommé de NotificationService à StockNotificationService
 
     private final StockRepository stockRepository;
     private final Map<Long, Boolean> notificationsEnvoyees = new HashMap<>();
@@ -20,7 +20,7 @@ public class NotificationService {
     private static final int SEUIL_CRITIQUE = 10;
     private static final int SEUIL_ALERTE = 20;
 
-    public NotificationService(StockRepository stockRepository) {
+    public StockNotificationService(StockRepository stockRepository) {
         this.stockRepository = stockRepository;
     }
 

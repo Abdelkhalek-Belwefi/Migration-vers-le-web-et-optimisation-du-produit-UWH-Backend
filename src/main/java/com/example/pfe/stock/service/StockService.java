@@ -6,6 +6,8 @@ import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.example.pfe.stock.dto.StockDTO;
 import com.example.pfe.stock.entity.MouvementStock;
 import com.example.pfe.stock.entity.Stock;
@@ -30,19 +32,24 @@ public class StockService {
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
     private final MouvementStockRepository mouvementRepository;
+    private final NotificationService notificationService;
 
+    private static final int SEUIL_CRITIQUE = 10;
+    private static final int SEUIL_ALERTE = 20;
     private static final int SEUIL_BLOCAGE = 1000;
 
     public StockService(StockRepository stockRepository,
                         ArticleRepository articleRepository,
                         UserRepository userRepository,
                         WarehouseRepository warehouseRepository,
-                        MouvementStockRepository mouvementRepository) {
+                        MouvementStockRepository mouvementRepository,
+                        NotificationService notificationService) {
         this.stockRepository = stockRepository;
         this.articleRepository = articleRepository;
         this.userRepository = userRepository;
         this.warehouseRepository = warehouseRepository;
         this.mouvementRepository = mouvementRepository;
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -188,6 +195,9 @@ public class StockService {
         // 🔹 ON NE SUPPRIME PLUS, ON GARDE AVEC QUANTITÉ 0 POUR L'HISTORIQUE
         if (nouvelleQuantite == 0) {
             System.out.println("📦 Stock épuisé pour l'article " + stock.getArticle().getId() + ", lot " + stock.getLot() + " (conservé pour historique)");
+
+            // 🔔 NOTIFICATION : Stock épuisé
+            envoyerNotificationStockEpuise(stock);
         }
 
         return convertToDTO(stockRepository.save(stock));
@@ -282,12 +292,107 @@ public class StockService {
 
             if (nouvelleQuantite == 0) {
                 System.out.println("📦 Stock épuisé pour l'article " + articleId + ", lot " + stock.getLot() + " (conservé pour historique)");
+                // 🔔 NOTIFICATION : Stock épuisé
+                envoyerNotificationStockEpuise(stock);
+            } else if (nouvelleQuantite <= SEUIL_CRITIQUE) {
+                // 🔔 NOTIFICATION : Stock critique
+                envoyerNotificationStockCritique(stock);
+            } else if (nouvelleQuantite <= SEUIL_ALERTE) {
+                // 🔔 NOTIFICATION : Stock faible
+                envoyerNotificationStockFaible(stock);
             }
 
             remainingToDecrement -= decrementFromThisStock;
         }
 
         System.out.println("📦 Stock total diminué pour l'article " + articleId + " : " + quantity + " unités");
+    }
+
+    // ========== MÉTHODES DE NOTIFICATION POUR LES STOCKS ==========
+
+    private void envoyerNotificationStockFaible(Stock stock) {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(currentUser.getEntrepot().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "⚠️ Stock faible",
+                                String.format("L'article %s (lot: %s) a un stock de %d unités (seuil: %d)",
+                                        stock.getArticle().getDesignation(),
+                                        stock.getLot(),
+                                        stock.getQuantite(),
+                                        SEUIL_ALERTE),
+                                NotificationType.ALERTE,
+                                "/dashboard?tab=stock",
+                                stock.getId(),
+                                "STOCK"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification stock faible: " + e.getMessage());
+        }
+    }
+
+    private void envoyerNotificationStockCritique(Stock stock) {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(currentUser.getEntrepot().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "🔴 Stock critique",
+                                String.format("URGENT: L'article %s (lot: %s) a un stock critique de %d unités (seuil: %d)",
+                                        stock.getArticle().getDesignation(),
+                                        stock.getLot(),
+                                        stock.getQuantite(),
+                                        SEUIL_CRITIQUE),
+                                NotificationType.ALERTE,
+                                "/dashboard?tab=stock",
+                                stock.getId(),
+                                "STOCK"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification stock critique: " + e.getMessage());
+        }
+    }
+
+    private void envoyerNotificationStockEpuise(Stock stock) {
+        try {
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEntrepot() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(currentUser.getEntrepot().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "❌ Stock épuisé",
+                                String.format("L'article %s (lot: %s) est épuisé. Réapprovisionnement nécessaire.",
+                                        stock.getArticle().getDesignation(),
+                                        stock.getLot()),
+                                NotificationType.ERREUR,
+                                "/dashboard?tab=stock",
+                                stock.getId(),
+                                "STOCK"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification stock épuisé: " + e.getMessage());
+        }
     }
 
     // ========== MÉTHODES AVEC FILTRE PAR ENTREPÔT ==========

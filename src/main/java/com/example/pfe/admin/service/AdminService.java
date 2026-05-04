@@ -6,6 +6,8 @@ import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,14 +21,17 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final WarehouseRepository warehouseRepository;  // ← NOUVEAU
+    private final WarehouseRepository warehouseRepository;
+    private final NotificationService notificationService;
 
     public AdminService(UserRepository userRepository,
                         PasswordEncoder passwordEncoder,
-                        WarehouseRepository warehouseRepository) {
+                        WarehouseRepository warehouseRepository,
+                        NotificationService notificationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.warehouseRepository = warehouseRepository;
+        this.notificationService = notificationService;
     }
 
     public List<UserDTO> getAllUsers() {
@@ -47,6 +52,23 @@ public class AdminService {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         user.setEstActif(true);
         User updatedUser = userRepository.save(user);
+
+        // 🔔 NOTIFICATION : Compte activé (pour l'utilisateur concerné)
+        try {
+            notificationService.createNotification(
+                    userId,
+                    "✅ Compte activé",
+                    String.format("Votre compte a été activé. Vous pouvez maintenant vous connecter avec le rôle: %s.",
+                            user.getRole().name()),
+                    NotificationType.SUCCES,
+                    "/login",
+                    userId,
+                    "USER"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(updatedUser);
     }
 
@@ -56,6 +78,22 @@ public class AdminService {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         user.setEstActif(false);
         User updatedUser = userRepository.save(user);
+
+        // 🔔 NOTIFICATION : Compte désactivé (pour l'utilisateur concerné)
+        try {
+            notificationService.createNotification(
+                    userId,
+                    "⚠️ Compte désactivé",
+                    "Votre compte a été désactivé. Contactez l'administrateur pour plus d'informations.",
+                    NotificationType.ALERTE,
+                    "/login",
+                    userId,
+                    "USER"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(updatedUser);
     }
 
@@ -64,6 +102,9 @@ public class AdminService {
     public UserDTO updateUserRole(Long userId, String newRole, Long entrepotId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        String ancienRole = user.getRole().name();
+
         try {
             Role role = Role.valueOf(newRole);
             user.setRole(role);
@@ -82,6 +123,23 @@ public class AdminService {
             }
 
             User updatedUser = userRepository.save(user);
+
+            // 🔔 NOTIFICATION : Changement de rôle (pour l'utilisateur concerné)
+            try {
+                notificationService.createNotification(
+                        userId,
+                        "🔄 Rôle modifié",
+                        String.format("Votre rôle a été changé de %s à %s. Veuillez vous reconnecter.",
+                                ancienRole, newRole),
+                        NotificationType.INFO,
+                        "/login",
+                        userId,
+                        "USER"
+                );
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+            }
+
             return convertToDTO(updatedUser);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("Rôle invalide: " + newRole);

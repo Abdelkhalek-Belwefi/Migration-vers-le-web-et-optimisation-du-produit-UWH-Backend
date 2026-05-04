@@ -11,6 +11,8 @@ import com.example.pfe.livraison.dto.ValidationLivraisonRequest;
 import com.example.pfe.livraison.entity.Livraison;
 import com.example.pfe.livraison.entity.LivraisonStatut;
 import com.example.pfe.livraison.repository.LivraisonRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpEntity;
@@ -40,6 +42,7 @@ public class LivraisonService {
     private final UserRepository userRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
     // Map de fallback pour les villes tunisiennes
     private static final Map<String, Double[]> CITY_COORDINATES = new HashMap<>();
@@ -78,12 +81,14 @@ public class LivraisonService {
 
     public LivraisonService(LivraisonRepository livraisonRepository,
                             ExpeditionRepository expeditionRepository,
-                            UserRepository userRepository) {
+                            UserRepository userRepository,
+                            NotificationService notificationService) {
         this.livraisonRepository = livraisonRepository;
         this.expeditionRepository = expeditionRepository;
         this.userRepository = userRepository;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -108,6 +113,27 @@ public class LivraisonService {
         livraison.setStatut(LivraisonStatut.ASSIGNEE);
 
         Livraison saved = livraisonRepository.save(livraison);
+
+        // 🔔 NOTIFICATION : Livraison assignée au transporteur
+        try {
+            notificationService.createNotification(
+                    transporteur.getId(),
+                    "🚚 Nouvelle livraison assignée",
+                    String.format("Vous avez une nouvelle livraison. BL: %s - Client: %s",
+                            saved.getExpedition().getNumeroBL(),
+                            saved.getExpedition().getCommande().getTypeCommande() == TypeCommande.TRANSFERT ?
+                                    "Transfert - " + saved.getExpedition().getCommande().getEntrepotDestination().getNom() :
+                                    saved.getExpedition().getCommande().getClient().getNom() + " " +
+                                            saved.getExpedition().getCommande().getClient().getPrenom()),
+                    NotificationType.INFO,
+                    "/transporteur?tab=livraisons",
+                    saved.getId(),
+                    "LIVRAISON"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(saved);
     }
 
@@ -290,7 +316,33 @@ public class LivraisonService {
         expedition.setStatut(com.example.pfe.expedition.entity.ExpeditionStatut.EXPEDIEE);
         expeditionRepository.save(expedition);
 
-        return convertToDTO(livraisonRepository.save(livraison));
+        LivraisonDTO result = convertToDTO(livraisonRepository.save(livraison));
+
+        // 🔔 NOTIFICATION : Livraison validée (pour le responsable de l'entrepôt demandeur)
+        try {
+            if (commande.getTypeCommande() == TypeCommande.TRANSFERT && commande.getEntrepotDestination() != null) {
+                List<User> responsables = userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT);
+                for (User responsable : responsables) {
+                    if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(commande.getEntrepotDestination().getId())) {
+                        notificationService.createNotification(
+                                responsable.getId(),
+                                "✅ Livraison validée",
+                                String.format("La livraison BL-%s a été validée par le transporteur. Articles reçus dans l'entrepôt.",
+                                        livraison.getExpedition().getNumeroBL()),
+                                NotificationType.SUCCES,
+                                "/dashboard?tab=livraisonsAttente",
+                                livraison.getId(),
+                                "LIVRAISON"
+                        );
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        return result;
     }
 
     // ========== MÉTHODES UTILITAIRES (INCHANGÉES) ==========

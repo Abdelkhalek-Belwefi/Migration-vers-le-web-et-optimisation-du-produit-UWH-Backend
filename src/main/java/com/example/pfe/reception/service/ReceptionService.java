@@ -5,6 +5,8 @@ import com.example.pfe.article.repository.ArticleRepository;
 import com.example.pfe.auth.entity.User;
 import com.example.pfe.auth.repository.UserRepository;
 import com.example.pfe.entrepot.entity.Warehouse;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.example.pfe.reception.dto.PutawayTaskDTO;
 import com.example.pfe.reception.dto.ReceptionDTO;
 import com.example.pfe.reception.dto.ReceptionLineDTO;
@@ -34,19 +36,22 @@ public class ReceptionService {
     private final ArticleRepository articleRepository;
     private final UserRepository userRepository;
     private final StockService stockService;
+    private final NotificationService notificationService;
 
     public ReceptionService(ReceptionRepository receptionRepository,
                             ReceptionLineRepository receptionLineRepository,
                             PutawayTaskRepository putawayTaskRepository,
                             ArticleRepository articleRepository,
                             UserRepository userRepository,
-                            StockService stockService) {
+                            StockService stockService,
+                            NotificationService notificationService) {
         this.receptionRepository = receptionRepository;
         this.receptionLineRepository = receptionLineRepository;
         this.putawayTaskRepository = putawayTaskRepository;
         this.articleRepository = articleRepository;
         this.userRepository = userRepository;
         this.stockService = stockService;
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -66,7 +71,6 @@ public class ReceptionService {
         }
 
         User currentUser = getCurrentUser();
-
         if (currentUser == null) {
             throw new RuntimeException("Utilisateur non connecté");
         }
@@ -93,6 +97,26 @@ public class ReceptionService {
             for (ReceptionLineDTO lineDTO : receptionDTO.getLignes()) {
                 addLineToReception(savedReception.getId(), lineDTO);
             }
+        }
+
+        // 🔔 NOTIFICATION : Nouvelle réception créée (pour les responsables entrepôt)
+        try {
+            userRepository.findByRole(com.example.pfe.auth.entity.Role.RESPONSABLE_ENTREPOT).forEach(responsable -> {
+                if (responsable.getEntrepot() != null && responsable.getEntrepot().getId().equals(userEntrepot.getId())) {
+                    notificationService.createNotification(
+                            responsable.getId(),
+                            "📦 Nouvelle réception en attente",
+                            String.format("Une nouvelle réception PO-%s est en attente de validation.",
+                                    savedReception.getNumeroPO()),
+                            NotificationType.INFO,
+                            "/dashboard?tab=reception",
+                            savedReception.getId(),
+                            "RECEPTION"
+                    );
+                }
+            });
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
         }
 
         return getReceptionById(savedReception.getId());
@@ -282,7 +306,7 @@ public class ReceptionService {
                         task.setEmplacementDestination(line.getEmplacementDestination());
                         task.setStatut("A_FAIRE");
                         task.setReception(reception);
-                        task.setEntrepot(reception.getEntrepot());  // ← SEULE LIGNE AJOUTÉE
+                        task.setEntrepot(reception.getEntrepot());
                         putawayTaskRepository.save(task);
                         tasksCrees++;
                         System.out.println("📋 Tâche de rangement créée pour l'article " + line.getArticle().getId());
@@ -296,6 +320,25 @@ public class ReceptionService {
         }
 
         System.out.println("✅ Validation terminée - " + tasksCrees + " tâches de rangement créées");
+
+        // 🔔 NOTIFICATION : Réception validée (pour l'opérateur qui a créé la réception)
+        try {
+            if (reception.getCreateur() != null) {
+                notificationService.createNotification(
+                        reception.getCreateur().getId(),
+                        "✅ Réception validée",
+                        String.format("La réception PO-%s a été validée. Des tâches de rangement ont été créées.",
+                                reception.getNumeroPO()),
+                        NotificationType.SUCCES,
+                        "/dashboard?tab=rangement",
+                        reception.getId(),
+                        "RECEPTION"
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
         return convertToDTO(savedReception);
     }
 

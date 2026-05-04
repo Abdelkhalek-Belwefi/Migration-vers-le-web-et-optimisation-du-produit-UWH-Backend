@@ -16,6 +16,8 @@ import com.example.pfe.expedition.util.BarcodeUtil;
 import com.example.pfe.livraison.entity.Livraison;
 import com.example.pfe.livraison.entity.LivraisonStatut;
 import com.example.pfe.livraison.repository.LivraisonRepository;
+import com.example.pfe.notification.enums.NotificationType;
+import com.example.pfe.notification.service.NotificationService;
 import com.example.pfe.service.EmailService;
 import com.example.pfe.stock.service.StockService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,7 @@ public class ExpeditionService {
     private final CommandeRepository commandeRepository;
     private final UserRepository userRepository;
     private final StockService stockService;
+    private final NotificationService notificationService;
 
     @Autowired
     private LivraisonRepository livraisonRepository;
@@ -45,11 +48,13 @@ public class ExpeditionService {
     public ExpeditionService(ExpeditionRepository expeditionRepository,
                              CommandeRepository commandeRepository,
                              UserRepository userRepository,
-                             StockService stockService) {
+                             StockService stockService,
+                             NotificationService notificationService) {
         this.expeditionRepository = expeditionRepository;
         this.commandeRepository = commandeRepository;
         this.userRepository = userRepository;
         this.stockService = stockService;
+        this.notificationService = notificationService;
     }
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
@@ -221,7 +226,7 @@ public class ExpeditionService {
         html.append("<div class='separator'></div>");
 
         html.append("<table class='info-table'>");
-        html.append("<tr><th>Transporteur :</th><td>").append(transporteurNom).append("</tr>");
+        html.append("<tr><th>Transporteur :</th><td>").append(transporteurNom).append("</td>");
         html.append("<tr><td colspan='2'>&nbsp;</td></tr>");
         html.append("<tr><th>Destinataire :</th><td>").append(clientNom).append("</td></tr>");
         html.append("<tr><th>Adresse :</th><td>").append(clientAdresse).append("</td></tr>");
@@ -270,7 +275,8 @@ public class ExpeditionService {
             html.append("</tr>");
         }
 
-        html.append("</tbody></table>");
+        html.append("</tbody>");
+        html.append("</table>");
         html.append("<div class='separator'></div>");
 
         html.append("<div class='barcode'>");
@@ -374,6 +380,65 @@ public class ExpeditionService {
         livraison.setStatut(LivraisonStatut.ASSIGNEE);
         livraison.setDateAssignation(LocalDateTime.now());
         livraisonRepository.save(livraison);
+
+        // 🔔 NOTIFICATION : Nouvelle livraison assignée (pour le transporteur)
+        try {
+            notificationService.createNotification(
+                    transporteur.getId(),
+                    "🚚 Nouvelle livraison assignée",
+                    String.format("Une nouvelle livraison vous a été assignée. BL: %s - Client: %s",
+                            saved.getNumeroBL(),
+                            commande.getTypeCommande() == TypeCommande.TRANSFERT ?
+                                    "Transfert - " + commande.getEntrepotDestination().getNom() :
+                                    commande.getClient().getNom() + " " + commande.getClient().getPrenom()),
+                    NotificationType.INFO,
+                    "/transporteur?tab=livraisons",
+                    saved.getId(),
+                    "EXPEDITION"
+            );
+        } catch (Exception e) {
+            System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+        }
+
+        // 🔔 NOTIFICATION : Commande expédiée (pour le demandeur - commande client)
+        if (commande.getTypeCommande() != TypeCommande.TRANSFERT) {
+            try {
+                userRepository.findByRole(Role.SERVICE_COMMERCIAL).forEach(commercial -> {
+                    notificationService.createNotification(
+                            commercial.getId(),
+                            "🚚 Commande expédiée",
+                            String.format("La commande N°%s a été expédiée. BL: %s",
+                                    commande.getNumeroCommande(), saved.getNumeroBL()),
+                            NotificationType.SUCCES,
+                            "/dashboard?tab=commandes",
+                            commande.getId(),
+                            "COMMANDE"
+                    );
+                });
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+            }
+        } else {
+            // 🔔 NOTIFICATION : Transfert expédié (pour l'opérateur de l'entrepôt demandeur)
+            try {
+                userRepository.findByEntrepotId(commande.getEntrepotDestination().getId()).forEach(demandeur -> {
+                    if (demandeur.getRole() == Role.OPERATEUR_ENTREPOT || demandeur.getRole() == Role.RESPONSABLE_ENTREPOT) {
+                        notificationService.createNotification(
+                                demandeur.getId(),
+                                "🚚 Transfert expédié",
+                                String.format("Le transfert depuis %s a été expédié. BL: %s",
+                                        commande.getEntrepotSource().getNom(), saved.getNumeroBL()),
+                                NotificationType.SUCCES,
+                                "/dashboard?tab=livraisonsAttente",
+                                commande.getId(),
+                                "TRANSFERT"
+                        );
+                    }
+                });
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'envoi de la notification: " + e.getMessage());
+            }
+        }
 
         // Envoi de l'email uniquement pour les commandes client (pas pour les transferts)
         if (commande.getTypeCommande() != TypeCommande.TRANSFERT) {
