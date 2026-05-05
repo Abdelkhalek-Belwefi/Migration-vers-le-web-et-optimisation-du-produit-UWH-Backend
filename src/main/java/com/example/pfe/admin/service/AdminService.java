@@ -8,6 +8,7 @@ import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
 import com.example.pfe.notification.enums.NotificationType;
 import com.example.pfe.notification.service.NotificationService;
+import com.example.pfe.service.EmailService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,15 +24,18 @@ public class AdminService {
     private final PasswordEncoder passwordEncoder;
     private final WarehouseRepository warehouseRepository;
     private final NotificationService notificationService;
+    private final EmailService emailService;
 
     public AdminService(UserRepository userRepository,
                         PasswordEncoder passwordEncoder,
                         WarehouseRepository warehouseRepository,
-                        NotificationService notificationService) {
+                        NotificationService notificationService,
+                        EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.warehouseRepository = warehouseRepository;
         this.notificationService = notificationService;
+        this.emailService = emailService;
     }
 
     public List<UserDTO> getAllUsers() {
@@ -160,18 +164,21 @@ public class AdminService {
                 .collect(Collectors.toList());
     }
 
-    // 🔹 MODIFIÉE : ajout de l'entrepôt dans la création
+    // 🔹 MODIFIÉE : ajout de l'entrepôt dans la création + envoi d'email
     @Transactional
     public UserDTO createUser(UserDTO userDTO) {
         if (userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
             throw new RuntimeException("Email déjà utilisé");
         }
 
+        String plainPassword = userDTO.getPassword();
+        String encodedPassword = passwordEncoder.encode(plainPassword);
+
         User user = new User();
         user.setNom(userDTO.getNom());
         user.setPrenom(userDTO.getPrenom());
         user.setEmail(userDTO.getEmail());
-        user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+        user.setPassword(encodedPassword);
         user.setRole(Role.valueOf(userDTO.getRole()));
         user.setEstActif(true);
 
@@ -183,6 +190,22 @@ public class AdminService {
         }
 
         User savedUser = userRepository.save(user);
+
+        // 🔔 ENVOI D'EMAIL : Notifier l'utilisateur de son compte créé
+        try {
+            emailService.sendWelcomeEmail(
+                    userDTO.getEmail(),
+                    userDTO.getPrenom(),
+                    userDTO.getNom(),
+                    userDTO.getEmail(),
+                    plainPassword,
+                    userDTO.getRole()
+            );
+            System.out.println("✅ Email de bienvenue envoyé à " + userDTO.getEmail());
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors de l'envoi de l'email: " + e.getMessage());
+        }
+
         return convertToDTO(savedUser);
     }
 
