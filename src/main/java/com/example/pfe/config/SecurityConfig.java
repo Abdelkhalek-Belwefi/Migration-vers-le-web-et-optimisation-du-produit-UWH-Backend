@@ -43,6 +43,9 @@ public class SecurityConfig {
                         // ===== WEBSOCKET POUR NOTIFICATIONS =====
                         .requestMatchers("/ws-notifications/**").permitAll()
 
+                        // ===== WEBSOCKET POUR CHATBOT =====
+                        .requestMatchers("/ws-chat/**").permitAll()
+
                         // ===== ROUTES TRANSFERT (SÉCURISÉES) =====
                         .requestMatchers(HttpMethod.GET, "/api/stocks/faibles").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.POST, "/api/commandes/transfert").hasAnyAuthority("RESPONSABLE_ENTREPOT", "ADMINISTRATEUR")
