@@ -12,11 +12,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -38,6 +41,7 @@ public class OcrService {
         System.out.println("✅ Tesseract initialisé avec datapath: " + tessdataPath);
     }
 
+    // ========== MÉTHODE EXISTANTE (POUR FICHIER UPLOAD) - INCHANGÉE ==========
     public Map<String, String> extractDocumentInfo(MultipartFile file) throws IOException, TesseractException {
         System.out.println("=== DÉBUT OCR ===");
         System.out.println("Nom fichier: " + file.getOriginalFilename());
@@ -105,6 +109,126 @@ public class OcrService {
         return result;
     }
 
+    // ========== NOUVELLE MÉTHODE : Analyser image en base64 reçue du mobile ==========
+    public Map<String, String> extractDocumentInfoFromBase64(String base64Image) throws IOException, TesseractException {
+        System.out.println("=== DÉBUT OCR DEPUIS BASE64 (MOBILE) ===");
+        System.out.println("📏 Taille base64: " + (base64Image != null ? base64Image.length() : 0));
+
+        // Nettoyer le base64 (enlever les préfixes éventuels)
+        String cleanBase64 = base64Image;
+        if (base64Image != null && base64Image.contains(",")) {
+            cleanBase64 = base64Image.substring(base64Image.indexOf(",") + 1);
+        }
+
+        // Décoder le base64 en bytes
+        byte[] imageBytes = Base64.getDecoder().decode(cleanBase64);
+
+        // Créer un fichier temporaire
+        Path tempFile = Files.createTempFile("ocr_mobile_", ".jpg");
+        Files.write(tempFile, imageBytes);
+
+        String extractedText;
+
+        try {
+            extractedText = extractTextFromImage(tempFile.toFile());
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        System.out.println("=== TEXTE EXTRAIT PAR OCR (MOBILE) ===");
+        System.out.println(extractedText);
+
+        Map<String, String> result = new HashMap<>();
+
+        // 1. Détection du Bon de commande (CMD-XXXXXX ou PO-XXXXXX)
+        String commande = extractCommandeNumber(extractedText);
+        if (commande != null && !commande.isEmpty()) {
+            result.put("numeroPO", commande);
+            System.out.println("✅ Bon de commande trouvé: " + commande);
+        } else {
+            // Fallback: chercher un numéro à 10-13 chiffres
+            String fallbackCommande = extractCommandeNumberFallback(extractedText);
+            if (fallbackCommande != null && !fallbackCommande.isEmpty()) {
+                result.put("numeroPO", fallbackCommande);
+                System.out.println("✅ Bon de commande (fallback) trouvé: " + fallbackCommande);
+            }
+        }
+
+        // 2. Détection du Bon de livraison (BL-XXXXXX)
+        String bl = extractBLNumber(extractedText);
+        if (bl != null && !bl.isEmpty()) {
+            result.put("bonLivraison", bl);
+            System.out.println("✅ Bon de livraison trouvé: " + bl);
+        } else {
+            // Fallback: chercher BL suivi de chiffres
+            String fallbackBL = extractBLNumberFallback(extractedText);
+            if (fallbackBL != null && !fallbackBL.isEmpty()) {
+                result.put("bonLivraison", fallbackBL);
+                System.out.println("✅ Bon de livraison (fallback) trouvé: " + fallbackBL);
+            }
+        }
+
+        // 3. Détection de la Date
+        String date = extractDate(extractedText);
+        if (date != null && !date.isEmpty()) {
+            date = formatDateToISO(date);
+            result.put("dateReception", date);
+            System.out.println("✅ Date trouvée: " + date);
+        } else {
+            // Date par défaut = aujourd'hui
+            result.put("dateReception", LocalDate.now().toString());
+            System.out.println("✅ Date par défaut utilisée: " + LocalDate.now());
+        }
+
+        // 4. Détection du Fournisseur
+        String fournisseur = extractFournisseur(extractedText);
+        if (fournisseur != null && !fournisseur.isEmpty()) {
+            result.put("fournisseur", fournisseur);
+            System.out.println("✅ Fournisseur trouvé: " + fournisseur);
+        }
+
+        System.out.println("=== RÉSULTAT OCR MOBILE FINAL ===");
+        System.out.println(result);
+        return result;
+    }
+
+    // ========== NOUVELLE MÉTHODE : Fallback pour extraire le Bon de commande ==========
+    private String extractCommandeNumberFallback(String text) {
+        // Chercher un numéro à 10-13 chiffres isolé
+        Pattern pattern = Pattern.compile("\\b([0-9]{10,13})\\b");
+        Matcher matcher = pattern.matcher(text);
+        if (matcher.find()) {
+            return "CMD-" + matcher.group(1);
+        }
+        return null;
+    }
+
+    // ========== NOUVELLE MÉTHODE : Fallback pour extraire le Bon de livraison ==========
+    private String extractBLNumberFallback(String text) {
+        // Chercher BL suivi de chiffres
+        Pattern pattern = Pattern.compile("BL[-\\s]*([0-9]{10,13})", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(text);
+        if (matcher.find()) {
+            return "BL-" + matcher.group(1);
+        }
+        return null;
+    }
+
+    // ========== NOUVELLE MÉTHODE : Formater la date en ISO ==========
+    private String formatDateToISO(String date) {
+        if (date == null) return null;
+
+        // Format DD/MM/YYYY -> YYYY-MM-DD
+        Pattern pattern = Pattern.compile("(\\d{2})/(\\d{2})/(\\d{4})");
+        Matcher matcher = pattern.matcher(date);
+        if (matcher.find()) {
+            return matcher.group(3) + "-" + matcher.group(2) + "-" + matcher.group(1);
+        }
+
+        return date;
+    }
+
+    // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
     private String extractCommandeNumber(String text) {
         Pattern pattern1 = Pattern.compile("N[°°]\\s*Bon\\s*de\\s*commande\\s*[:\\s]*([A-Z0-9\\-]+)", Pattern.CASE_INSENSITIVE);
         Matcher matcher1 = pattern1.matcher(text);
@@ -172,17 +296,14 @@ public class OcrService {
     }
 
     private String extractFournisseur(String text) {
-        // Chercher la ligne Destinataire qui contient "Transfert entre entrepôts - Entrepot XXX"
         Pattern destPattern = Pattern.compile("Destinataire\\s*[:\\s]*Transfert\\s*entre\\s*entrepôts\\s*-\\s*Entrepot\\s*([A-Za-z\\s]+)", Pattern.CASE_INSENSITIVE);
         Matcher destMatcher = destPattern.matcher(text);
         if (destMatcher.find()) {
             String entrepotNom = destMatcher.group(1).trim();
-            // Nettoyer le nom (remplacer plusieurs espaces par un seul)
             entrepotNom = entrepotNom.replaceAll("\\s+", " ");
             return "Transfert entre entrepôts - Entrepot " + entrepotNom;
         }
 
-        // Fallback: chercher "Transfert entre entrepôts" sans Destinataire
         Pattern transfertPattern = Pattern.compile("Transfert\\s*entre\\s*entrepôts\\s*-\\s*Entrepot\\s*([A-Za-z\\s]+)", Pattern.CASE_INSENSITIVE);
         Matcher transfertMatcher = transfertPattern.matcher(text);
         if (transfertMatcher.find()) {
