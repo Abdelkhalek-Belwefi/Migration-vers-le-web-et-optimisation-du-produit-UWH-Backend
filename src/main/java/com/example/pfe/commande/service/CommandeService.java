@@ -314,6 +314,9 @@ public class CommandeService {
         return null;
     }
 
+    // ========== MÉTHODES AVEC FILTRE PAR ENTREPÔT ==========
+    // ⚠️ CES MÉTHODES N'ONT PAS D'ANNOTATIONS @Cacheable POUR ÉVITER LES ERREURS SpEL
+
     public List<CommandeDTO> getAllCommandesFiltered() {
         Long entrepotId = getCurrentUserEntrepotId();
         List<Commande> commandes;

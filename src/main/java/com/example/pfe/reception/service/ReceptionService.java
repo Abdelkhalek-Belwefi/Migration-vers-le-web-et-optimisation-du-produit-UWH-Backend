@@ -425,6 +425,7 @@ public class ReceptionService {
     }
 
     // ========== NOUVELLES MÉTHODES POUR LE FILTRAGE PAR ENTREPÔT ==========
+    // ⚠️ CES MÉTHODES N'ONT PAS D'ANNOTATIONS @Cacheable POUR ÉVITER LES ERREURS SpEL
 
     private Long getCurrentUserEntrepotId() {
         try {

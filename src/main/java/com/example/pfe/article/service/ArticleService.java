@@ -10,6 +10,8 @@ import com.example.pfe.entrepot.entity.Warehouse;
 import com.example.pfe.entrepot.repository.WarehouseRepository;
 import com.example.pfe.notification.enums.NotificationType;
 import com.example.pfe.notification.service.NotificationService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -38,24 +40,28 @@ public class ArticleService {
 
     // ========== MÉTHODES EXISTANTES (INCHANGÉES) ==========
 
+    // @Cacheable(value = "articles")  ← SUPPRIMÉ (causait l'erreur 400)
     public List<ArticleDTO> getAllArticles() {
         return articleRepository.findAll().stream()
                 .map(ArticleDTO::new)
                 .collect(Collectors.toList());
     }
 
+    //@Cacheable(value = "articles", key = "#id")
     public ArticleDTO getArticleById(Long id) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
         return new ArticleDTO(article);
     }
 
+    //@Cacheable(value = "articles", key = "#codeERP")
     public ArticleDTO getArticleByCodeERP(String codeERP) {
         Article article = articleRepository.findByCodeArticleERP(codeERP)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé avec le code ERP: " + codeERP));
         return new ArticleDTO(article);
     }
 
+    //@Cacheable(value = "articles", key = "#gtin")
     public ArticleDTO getArticleByGTIN(String gtin) {
         Article article = articleRepository.findByGtin(gtin)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé avec le GTIN: " + gtin));
@@ -65,6 +71,7 @@ public class ArticleService {
     // ========== MÉTHODE CREATE ARTICLE CORRIGÉE (SANS ENTREPÔT OBLIGATOIRE) ==========
 
     @Transactional
+    @CacheEvict(value = "articles", allEntries = true)
     public ArticleDTO createArticle(ArticleDTO dto) {
         // Récupérer l'utilisateur connecté
         User currentUser = getCurrentUser();
@@ -114,6 +121,7 @@ public class ArticleService {
     }
 
     @Transactional
+    @CacheEvict(value = "articles", allEntries = true)
     public ArticleDTO updateArticle(Long id, ArticleDTO dto) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
@@ -159,6 +167,7 @@ public class ArticleService {
     }
 
     @Transactional
+    @CacheEvict(value = "articles", allEntries = true)
     public void deleteArticle(Long id) {
         Article article = articleRepository.findById(id).orElse(null);
         articleRepository.deleteById(id);
@@ -186,6 +195,7 @@ public class ArticleService {
     }
 
     @Transactional
+    @CacheEvict(value = "articles", allEntries = true)
     public ArticleDTO activerArticle(Long id) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));
@@ -216,6 +226,7 @@ public class ArticleService {
     }
 
     @Transactional
+    @CacheEvict(value = "articles", allEntries = true)
     public ArticleDTO desactiverArticle(Long id) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Article non trouvé"));

@@ -396,6 +396,7 @@ public class StockService {
     }
 
     // ========== MÉTHODES AVEC FILTRE PAR ENTREPÔT ==========
+    // ⚠️ CES MÉTHODES N'ONT PAS D'ANNOTATIONS @Cacheable POUR ÉVITER LES ERREURS SpEL
 
     private User getCurrentUser() {
         try {
